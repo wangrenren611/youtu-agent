@@ -1,0 +1,8 @@
+# 基础模型配置
+provider: openai
+model: "gpt-3.5-turbo"
+apiKey: "${OPENAI_API_KEY}"
+baseUrl: "https://api.openai.com/v1"
+temperature: 0.7
+maxTokens: 4000
+timeout: 30000

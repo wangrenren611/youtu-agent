@@ -1,0 +1,22 @@
+# 文件编辑工具配置
+name: "file_edit"
+type: "builtin"
+enabled: true
+parameters:
+  maxFileSize: 10485760  # 10MB
+  allowedExtensions:
+    - ".txt"
+    - ".md"
+    - ".json"
+    - ".yaml"
+    - ".yml"
+    - ".js"
+    - ".ts"
+    - ".py"
+    - ".html"
+    - ".css"
+  restrictedPaths:
+    - "/etc"
+    - "/sys"
+    - "/proc"
+    - "/dev"

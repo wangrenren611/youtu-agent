@@ -1,0 +1,90 @@
+# 编排智能体配置示例
+type: orchestra
+name: "orchestra_agent"
+model:
+  provider: openai
+  model: "gpt-3.5-turbo"
+  apiKey: "${OPENAI_API_KEY}"
+  temperature: 0.7
+  maxTokens: 4000
+
+# 规划智能体配置
+plannerModel:
+  provider: openai
+  model: "gpt-3.5-turbo"
+  apiKey: "${OPENAI_API_KEY}"
+  temperature: 0.3
+  maxTokens: 2000
+
+plannerConfig:
+  examples_path: "./examples/orchestra_planning_examples.json"
+
+# 工作智能体配置
+workers:
+  researcher:
+    type: simple
+    name: "researcher"
+    model:
+      provider: openai
+      model: "gpt-3.5-turbo"
+      apiKey: "${OPENAI_API_KEY}"
+    tools: ["web_search", "file_read"]
+    instructions: "你是一个专业的研究员，擅长收集和分析信息。"
+  
+  writer:
+    type: simple
+    name: "writer"
+    model:
+      provider: openai
+      model: "gpt-3.5-turbo"
+      apiKey: "${OPENAI_API_KEY}"
+    tools: ["file_write", "file_read"]
+    instructions: "你是一个专业的写作者，擅长整理和撰写内容。"
+  
+  analyst:
+    type: simple
+    name: "analyst"
+    model:
+      provider: openai
+      model: "gpt-3.5-turbo"
+      apiKey: "${OPENAI_API_KEY}"
+    tools: ["python_execute", "data_analyze"]
+    instructions: "你是一个专业的数据分析师，擅长数据处理和分析。"
+
+# 工作智能体信息
+workersInfo:
+  - name: "researcher"
+    desc: "信息研究员，负责收集和整理信息"
+    strengths: ["网络搜索", "信息整理", "事实核查"]
+    weaknesses: ["数据分析", "内容创作"]
+  
+  - name: "writer"
+    desc: "内容写作者，负责撰写和编辑内容"
+    strengths: ["内容创作", "文案编辑", "结构化写作"]
+    weaknesses: ["数据分析", "技术实现"]
+  
+  - name: "analyst"
+    desc: "数据分析师，负责数据处理和分析"
+    strengths: ["数据分析", "统计计算", "可视化"]
+    weaknesses: ["内容创作", "信息收集"]
+
+# 报告智能体配置
+reporterModel:
+  provider: openai
+  model: "gpt-3.5-turbo"
+  apiKey: "${OPENAI_API_KEY}"
+  temperature: 0.5
+  maxTokens: 3000
+
+reporterConfig:
+  template_path: "./templates/orchestra_report.j2"
+
+# 工具配置
+tools:
+  - "web_search"
+  - "file_read"
+  - "file_write"
+  - "python_execute"
+  - "data_analyze"
+
+maxTurns: 50
