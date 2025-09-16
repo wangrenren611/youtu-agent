@@ -34,7 +34,7 @@ export class Logger {
     const transports: winston.transport[] = [
       // 控制台输出
       new winston.transports.Console({
-        level: process.env.LOG_LEVEL || 'info',
+        level: process.env['LOG_LEVEL'] || 'info',
         format: winston.format.combine(
           winston.format.colorize(),
           logFormat
@@ -43,8 +43,8 @@ export class Logger {
     ];
 
     // 文件输出
-    if (process.env.NODE_ENV === 'production') {
-      const logDir = process.env.LOG_DIR || './logs';
+    if (process.env['NODE_ENV'] === 'production') {
+      const logDir = process.env['LOG_DIR'] || './logs';
       
       // 错误日志
       transports.push(
@@ -69,7 +69,7 @@ export class Logger {
     }
 
     return winston.createLogger({
-      level: process.env.LOG_LEVEL || 'info',
+      level: process.env['LOG_LEVEL'] || 'info',
       format: logFormat,
       transports,
       exitOnError: false

@@ -5,7 +5,8 @@
 ## 🚀 特性
 
 - **多智能体支持**: 支持简单智能体、编排智能体、工作流智能体等多种类型
-- **丰富的工具生态**: 内置文件操作、搜索、代码执行等常用工具
+- **丰富的工具生态**: 内置文件操作、搜索、代码执行、数据库操作等常用工具
+- **数据库支持**: 完整的数据库集成，支持SQLite、PostgreSQL、MySQL
 - **配置驱动**: 基于YAML的灵活配置系统
 - **类型安全**: 完整的TypeScript类型定义
 - **可扩展性**: 支持自定义工具和智能体
@@ -132,6 +133,7 @@ src/
 - **代码执行**: Python、JavaScript、Shell
 - **图像处理**: 图像生成、编辑
 - **数据处理**: CSV、JSON处理
+- **数据库操作**: SQL查询、数据插入、更新、删除
 
 ## 🔧 配置
 
@@ -140,6 +142,9 @@ src/
 ```bash
 # OpenAI API密钥
 OPENAI_API_KEY=your-api-key
+
+# 数据库配置
+DATABASE_URL=sqlite:./data/youtu-agent.db
 
 # 日志级别
 LOG_LEVEL=info
@@ -231,6 +236,67 @@ class ToolManager {
 }
 ```
 
+## 💾 数据库功能
+
+### 数据库配置
+
+框架支持多种数据库，通过`DATABASE_URL`环境变量配置：
+
+```bash
+# SQLite (推荐用于开发)
+DATABASE_URL=sqlite:./data/youtu-agent.db
+
+# PostgreSQL
+DATABASE_URL=postgresql://user:password@localhost:5432/database
+
+# MySQL
+DATABASE_URL=mysql://user:password@localhost:3306/database
+```
+
+### 数据库工具使用
+
+```typescript
+import { YoutuAgentTS } from 'youtu-agent-ts';
+
+const framework = new YoutuAgentTS();
+await framework.initialize();
+
+// 创建带有数据库工具的智能体
+const agent = await framework.createAgent({
+  type: 'simple',
+  name: 'db_agent',
+  model: { provider: 'openai', model: 'gpt-3.5-turbo' },
+  tools: ['database'], // 包含数据库工具
+  instructions: '你是一个数据库助手，可以执行SQL操作'
+});
+
+// 执行数据库操作
+const result = await agent.run('请查询evaluation_data表中的所有数据');
+console.log(result.output);
+```
+
+### 数据库表结构
+
+框架自动创建以下表：
+
+- `data`: 数据集样本
+- `evaluation_data`: 评估数据
+- `tracing_tool`: 工具追踪
+- `tracing_generation`: 生成追踪
+- `cache_tool`: 工具缓存
+
+### 数据库追踪
+
+当配置了数据库后，框架会自动将追踪数据存储到数据库中：
+
+```typescript
+// 获取数据库追踪处理器
+const dbTracing = framework.getDBTracingProcessor();
+if (dbTracing?.isEnabled()) {
+  console.log('数据库追踪已启用');
+}
+```
+
 ## 🔌 扩展开发
 
 ### 自定义工具
@@ -293,6 +359,55 @@ class MyAgent extends BaseAgent {
 - 内存使用监控
 - 工具调用追踪
 - 错误日志记录
+
+## 🎯 示例
+
+### 运行示例
+
+```bash
+# 基本示例
+npm run example
+
+# 编排智能体示例
+npm run example:orchestra
+
+# 数据库功能示例
+npm run example:database
+```
+
+### 数据库示例
+
+```bash
+# 设置环境变量
+export DATABASE_URL="sqlite:./data/youtu-agent.db"
+export OPENAI_API_KEY="your-api-key"
+
+# 运行数据库示例
+npm run example:database
+```
+
+**注意**: 使用数据库功能需要：
+1. 正确安装sqlite3模块：
+   ```bash
+   # 自动安装脚本（推荐）
+   npm run install:sqlite3
+   
+   # 或手动安装
+   pnpm install sqlite3
+   ```
+2. 配置DATABASE_URL环境变量
+3. 确保数据库文件路径可写
+
+如果遇到sqlite3编译问题，请确保已安装Xcode Command Line Tools：
+```bash
+xcode-select --install
+```
+
+这个示例将展示：
+- 数据库连接和表结构查询
+- 数据插入和查询操作
+- 数据分析和统计
+- 智能体与数据库的交互
 
 ## 🤝 贡献
 

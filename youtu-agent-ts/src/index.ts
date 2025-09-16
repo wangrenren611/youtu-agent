@@ -6,9 +6,11 @@
 import { AgentFactory } from './agents';
 import { ToolManager } from './core/tool/ToolManager';
 import { ConfigManager } from './core/config/ConfigManager';
+import { DatabaseManager } from './db/DatabaseManager';
+import { DBTracingProcessor } from './db/DBTracingProcessor';
 import { Logger } from './utils/Logger';
 import { builtinTools } from './tools';
-import { AgentConfig, ModelConfig, ToolConfig } from './types';
+import { AgentConfig } from './types';
 import * as dotenv from "dotenv";
 
 dotenv.config({ path: ".env" });
@@ -19,6 +21,8 @@ export * from './types';
 export { BaseAgent } from './core/agent/BaseAgent';
 export { ToolManager } from './core/tool/ToolManager';
 export { ConfigManager } from './core/config/ConfigManager';
+export { DatabaseManager } from './db/DatabaseManager';
+export { DBTracingProcessor } from './db/DBTracingProcessor';
 export { Logger } from './utils/Logger';
 
 // 导出智能体
@@ -36,12 +40,38 @@ export class YoutuAgentTS {
   private readonly logger: Logger;
   private readonly toolManager: ToolManager;
   private readonly configManager: ConfigManager;
+  private readonly dbManager: DatabaseManager | null;
+  private readonly dbTracingProcessor: DBTracingProcessor | null;
   private isInitialized: boolean = false;
 
   constructor() {
     this.logger = new Logger('YoutuAgentTS');
     this.toolManager = new ToolManager();
     this.configManager = new ConfigManager();
+    
+    // 初始化数据库管理器（如果配置了DATABASE_URL）
+    const databaseUrl = process.env['DATABASE_URL'];
+    if (databaseUrl) {
+      try {
+        this.dbManager = DatabaseManager.getInstance({
+          url: databaseUrl,
+          poolSize: 10,
+          maxOverflow: 20,
+          poolTimeout: 30,
+          poolPrePing: true
+        });
+        this.dbTracingProcessor = new DBTracingProcessor(this.dbManager);
+        this.logger.info('数据库支持已启用');
+      } catch (error) {
+        this.logger.warn('数据库初始化失败，数据库支持已禁用:', error);
+        this.dbManager = null;
+        this.dbTracingProcessor = null;
+      }
+    } else {
+      this.dbManager = null;
+      this.dbTracingProcessor = null;
+      this.logger.info('未配置DATABASE_URL，数据库支持已禁用');
+    }
   }
 
   /**
@@ -54,6 +84,12 @@ export class YoutuAgentTS {
 
     try {
       this.logger.info('正在初始化youtu-agent-ts框架...');
+
+      // 初始化数据库（如果可用）
+      if (this.dbManager) {
+        await this.dbManager.initialize();
+        this.logger.info('数据库初始化完成');
+      }
 
       // 注册内置工具
       this.toolManager.registerTools(builtinTools);
@@ -74,7 +110,7 @@ export class YoutuAgentTS {
    */
   async createAgent(config: AgentConfig) {
     await this.initialize();
-    return AgentFactory.createAgent(config);
+    return AgentFactory.createAgent(config, this.toolManager, this.configManager);
   }
 
   /**
@@ -132,8 +168,28 @@ export class YoutuAgentTS {
       tools: {
         total: this.toolManager.getAllTools().length,
         names: this.toolManager.getToolNames()
+      },
+      database: {
+        enabled: this.dbManager !== null,
+        tracingEnabled: this.dbTracingProcessor?.isEnabled() || false
       }
     };
+  }
+
+  /**
+   * 获取数据库管理器
+   * @returns 数据库管理器实例或null
+   */
+  getDatabaseManager(): DatabaseManager | null {
+    return this.dbManager;
+  }
+
+  /**
+   * 获取数据库追踪处理器
+   * @returns 数据库追踪处理器实例或null
+   */
+  getDBTracingProcessor(): DBTracingProcessor | null {
+    return this.dbTracingProcessor;
   }
 
   /**
@@ -145,6 +201,12 @@ export class YoutuAgentTS {
       
       await AgentFactory.cleanupAll();
       this.toolManager.cleanup();
+      
+      // 关闭数据库连接
+      if (this.dbManager) {
+        await this.dbManager.close();
+        this.logger.info('数据库连接已关闭');
+      }
       
       this.isInitialized = false;
       this.logger.info('框架资源清理完成');

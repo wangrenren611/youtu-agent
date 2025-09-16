@@ -1,18 +1,33 @@
 /**
  * 简单智能体
- * 基于LangChain实现的单轮对话智能体
+ * 
+ * 基于ReAct模式实现的智能体，支持工具调用和单轮对话。
+ * 适用于简单的任务处理，如文件操作、数据查询等。
+ * 
+ * @example
+ * ```typescript
+ * const agent = new SimpleAgent({
+ *   type: 'simple',
+ *   name: 'my_agent',
+ *   model: { provider: 'deepseek', model: 'deepseek-chat', apiKey: 'your-key' },
+ *   tools: ['file_read', 'file_write']
+ * });
+ * 
+ * const result = await agent.run('创建一个hello.txt文件');
+ * ```
  */
 
 import { BaseAgent } from '../core/agent/BaseAgent';
-import { AgentConfig, TaskRecorder, Message } from '../types';
+import { AgentConfig, AgentError, ERROR_CODES } from '../types';
 import { SimpleLLMClient, SimpleLLMMessage } from '../core/llm/SimpleLLMClient';
-import { AgentError } from '../types';
+import { ToolManager } from '../core/tool/ToolManager';
+import { ConfigManager } from '../core/config/ConfigManager';
 
 export class SimpleAgent extends BaseAgent {
   private llm: SimpleLLMClient | null = null;
 
-  constructor(config: AgentConfig) {
-    super(config);
+  constructor(config: AgentConfig, toolManager?: ToolManager, configManager?: ConfigManager) {
+    super(config, toolManager, configManager);
     // logger在BaseAgent中已经初始化，这里不需要重新赋值
   }
 
@@ -25,7 +40,7 @@ export class SimpleAgent extends BaseAgent {
 
       // 检查API密钥
       if (!this.config.model.apiKey || this.config.model.apiKey === 'your-api-key-here') {
-        throw new Error('OpenAI API密钥未配置或无效。请检查.env文件中的OPENAI_API_KEY设置。');
+        throw new AgentError('API密钥未配置或无效。请检查配置中的apiKey设置。', ERROR_CODES.AGENT.INVALID_API_KEY);
       }
 
       this.logger.info(`使用模型: ${this.config.model.model}`);
@@ -36,21 +51,22 @@ export class SimpleAgent extends BaseAgent {
         provider: this.config.model.provider,
         model: this.config.model.model,
         apiKey: this.config.model.apiKey,
-        baseUrl: this.config.model.baseUrl,
+        baseUrl: this.config.model.baseUrl || 'https://api.deepseek.com',
         temperature: this.config.temperature || 0.7,
         maxTokens: this.config.maxTokens || 4000,
         timeout: this.config.model.timeout || 30000
       });
 
-      // 测试连接
-      const isConnected = await this.llm.testConnection();
-      if (!isConnected) {
-        throw new Error('LLM连接测试失败，请检查API密钥和网络连接');
-      }
-
-      // 如果有工具，记录工具信息
-      if (this.config.tools && this.config.tools.length > 0) {
-        this.logger.info(`可用工具: ${this.config.tools.join(', ')}`);
+      // 测试连接（失败时不阻止智能体创建）
+      try {
+        const isConnected = await this.llm.testConnection();
+        if (!isConnected) {
+          this.logger.warn('LLM连接测试失败，智能体仍可创建但可能无法正常工作');
+        } else {
+          this.logger.info('LLM连接测试成功');
+        }
+      } catch (error) {
+        this.logger.warn('LLM连接测试异常，智能体仍可创建但可能无法正常工作:', error);
       }
 
       this.logger.info('简单智能体初始化完成');
@@ -67,158 +83,58 @@ export class SimpleAgent extends BaseAgent {
       });
       throw new AgentError(
         `简单智能体初始化失败: ${error instanceof Error ? error.message : '未知错误'}`,
-        'SIMPLE_AGENT_INIT_FAILED',
+        ERROR_CODES.AGENT.SIMPLE_AGENT_INIT_FAILED,
         error
       );
     }
   }
 
   /**
-   * 执行任务
-   * @param input 输入内容
-   * @param recorder 任务记录器
-   * @returns 执行结果
+   * 调用LLM - 实现BaseAgent的抽象方法
+   * @param prompt 提示词
+   * @returns LLM响应
    */
-  protected async execute(input: string, recorder: TaskRecorder): Promise<string> {
+  protected async callLLM(prompt: string): Promise<string> {
     if (!this.llm) {
-      throw new AgentError('语言模型未初始化', 'LLM_NOT_INITIALIZED');
+      throw new AgentError('语言模型未初始化', ERROR_CODES.AGENT.LLM_NOT_INITIALIZED);
     }
 
     try {
-      this.logger.info('开始执行简单智能体任务', { input });
-
       // 构建消息
-      const messages = this.buildMessages(input, recorder);
+      const messages: SimpleLLMMessage[] = [];
       
+      // 添加系统消息
+      if (this.config.instructions) {
+        messages.push({
+          role: 'system',
+          content: this.config.instructions
+        });
+      }
+      
+      // 添加用户消息
+      messages.push({
+        role: 'user',
+        content: prompt
+      });
+
       // 调用语言模型
       const response = await this.llm.invoke(messages);
       
-      // 记录消息
-      recorder.messages.push({
-        role: 'user',
-        content: input,
-        timestamp: new Date()
-      });
-
-      recorder.messages.push({
-        role: 'assistant',
-        content: response.content,
-        timestamp: new Date()
-      });
-
       // 记录使用情况
       if (response.usage) {
-        this.logger.info('Token使用情况:', response.usage);
+        this.logger.debug('Token使用情况:', response.usage);
       }
 
-      this.logger.info('简单智能体任务执行完成');
       return response.content;
-
     } catch (error) {
-      this.logger.error('简单智能体任务执行失败:', error);
+      this.logger.error('LLM调用失败:', error);
       throw new AgentError(
-        `简单智能体任务执行失败: ${error instanceof Error ? error.message : '未知错误'}`,
-        'SIMPLE_AGENT_EXECUTION_FAILED',
+        `LLM调用失败: ${error instanceof Error ? error.message : '未知错误'}`,
+        ERROR_CODES.AGENT.LLM_CALL_FAILED,
         error
       );
     }
   }
-
-  /**
-   * 流式执行任务
-   * @param input 输入内容
-   * @param recorder 任务记录器
-   * @returns 异步生成器
-   */
-  protected async* executeStream(input: string, recorder: TaskRecorder): AsyncGenerator<Message, void, unknown> {
-    if (!this.llm) {
-      throw new AgentError('语言模型未初始化', 'LLM_NOT_INITIALIZED');
-    }
-
-    try {
-      this.logger.info('开始流式执行简单智能体任务', { input });
-
-      // 构建消息
-      const messages = this.buildMessages(input, recorder);
-      
-      // 记录用户消息
-      const userMessage: Message = {
-        role: 'user',
-        content: input,
-        timestamp: new Date()
-      };
-      recorder.messages.push(userMessage);
-      yield userMessage;
-
-      // 流式调用语言模型
-      const stream = this.llm.invokeStream(messages);
-      
-      let assistantMessage: Message = {
-        role: 'assistant',
-        content: '',
-        timestamp: new Date()
-      };
-
-      for await (const chunk of stream) {
-        assistantMessage.content += chunk;
-        
-        // 发送部分内容
-        yield {
-          ...assistantMessage,
-          content: chunk
-        };
-      }
-
-      // 记录完整的助手消息
-      recorder.messages.push(assistantMessage);
-      yield assistantMessage;
-
-      this.logger.info('简单智能体流式任务执行完成');
-
-    } catch (error) {
-      this.logger.error('简单智能体流式任务执行失败:', error);
-      throw new AgentError(
-        `简单智能体流式任务执行失败: ${error instanceof Error ? error.message : '未知错误'}`,
-        'SIMPLE_AGENT_STREAM_EXECUTION_FAILED',
-        error
-      );
-    }
-  }
-
-  /**
-   * 构建消息列表
-   * @param input 输入内容
-   * @param recorder 任务记录器
-   * @returns 消息列表
-   */
-  private buildMessages(input: string, recorder: TaskRecorder): SimpleLLMMessage[] {
-    const messages: SimpleLLMMessage[] = [];
-
-    // 添加系统消息
-    if (this.config.instructions) {
-      messages.push({
-        role: 'system',
-        content: this.config.instructions
-      });
-    }
-
-    // 添加历史消息
-    for (const msg of recorder.messages) {
-      messages.push({
-        role: msg.role as 'user' | 'assistant' | 'system',
-        content: msg.content
-      });
-    }
-
-    // 添加当前输入
-    messages.push({
-      role: 'user',
-      content: input
-    });
-
-    return messages;
-  }
-
 
   /**
    * 清理资源
@@ -232,7 +148,7 @@ export class SimpleAgent extends BaseAgent {
    * 获取智能体信息
    * @returns 智能体信息
    */
-  getInfo(): any {
+  override getInfo(): Record<string, unknown> {
     return {
       type: 'simple',
       name: this.config.name,

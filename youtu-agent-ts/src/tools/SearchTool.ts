@@ -46,7 +46,7 @@ const webSearchHandler: ToolHandler = async (args) => {
       count: searchResults.length
     });
   } catch (error) {
-    logger.error(`网络搜索失败: ${args.query}`, error);
+    logger.error(`网络搜索失败: ${args['query']}`, error);
     return JSON.stringify({
       success: false,
       error: error instanceof Error ? error.message : '未知错误'
@@ -79,7 +79,7 @@ const localSearchHandler: ToolHandler = async (args) => {
       count: searchResults.length
     });
   } catch (error) {
-    logger.error(`本地搜索失败: ${args.query}`, error);
+    logger.error(`本地搜索失败: ${args['query']}`, error);
     return JSON.stringify({
       success: false,
       error: error instanceof Error ? error.message : '未知错误'
@@ -88,7 +88,7 @@ const localSearchHandler: ToolHandler = async (args) => {
 };
 
 // 执行网络搜索
-async function performWebSearch(query: string, maxResults: number, language: string): Promise<any[]> {
+async function performWebSearch(query: string, maxResults: number, _language: string): Promise<any[]> {
   try {
     // 使用DuckDuckGo Instant Answer API
     const response = await axios.get('https://api.duckduckgo.com/', {
@@ -148,7 +148,7 @@ async function performWebSearch(query: string, maxResults: number, language: str
 }
 
 // 备用搜索方法
-async function performFallbackSearch(query: string, maxResults: number): Promise<any[]> {
+async function performFallbackSearch(query: string, _maxResults: number): Promise<any[]> {
   // 这里可以实现其他搜索API的调用
   // 例如：Google Custom Search API、Bing Search API等
   

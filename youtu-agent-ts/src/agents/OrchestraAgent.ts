@@ -45,8 +45,8 @@ export class OrchestraAgent extends BaseAgent {
   private plannerAgent: any;
   private reporterAgent: any;
 
-  constructor(config: AgentConfig) {
-    super(config);
+  constructor(config: AgentConfig, toolManager?: any, configManager?: any) {
+    super(config, toolManager, configManager);
     this.traceManager = new TraceManager();
     
     // 初始化规划智能体
@@ -564,6 +564,27 @@ ${JSON.stringify(subtaskResults, null, 2)}
   }
 
   /**
+   * 调用LLM - 实现BaseAgent的抽象方法
+   * 编排智能体不直接调用LLM，而是通过子智能体执行
+   * @param prompt 提示词
+   * @returns LLM响应
+   */
+  protected async callLLM(prompt: string): Promise<string> {
+    // 编排智能体不直接调用LLM，而是通过规划智能体来执行
+    if (!this.plannerAgent) {
+      throw new Error('规划智能体未初始化，无法调用LLM');
+    }
+
+    try {
+      const result = await this.plannerAgent.run(prompt);
+      return result.output;
+    } catch (error) {
+      this.logger.error('通过规划智能体调用LLM失败:', error);
+      throw new Error(`LLM调用失败: ${error instanceof Error ? error.message : '未知错误'}`);
+    }
+  }
+
+  /**
    * 清理资源
    */
   protected override async onCleanup(): Promise<void> {
@@ -591,7 +612,7 @@ ${JSON.stringify(subtaskResults, null, 2)}
    * 获取智能体信息
    * @returns 智能体信息
    */
-  getInfo(): any {
+  override getInfo(): Record<string, unknown> {
     return {
       type: 'orchestra',
       name: this.config.name,

@@ -33,7 +33,7 @@ export interface ToolDefinition {
 }
 
 // 工具处理器类型
-export type ToolHandler = (args: any) => Promise<string>;
+export type ToolHandler = (args: Record<string, any>) => Promise<string>;
 
 // 智能体配置类型
 export interface AgentConfig {
@@ -82,6 +82,31 @@ export interface TaskRecorder {
   endTime?: Date;
   status: 'pending' | 'running' | 'completed' | 'failed';
   error?: string;
+  
+  // ReAct模式相关字段
+  reasoning: string[];        // 记录每轮的推理过程
+  actions: Action[];          // 记录每轮的行动
+  observations: string[];     // 记录每轮的观察结果
+  turns: number;              // 当前轮次
+  maxTurns: number;           // 最大轮次限制
+}
+
+// 行动类型
+export interface Action {
+  type: 'tool_call' | 'response';
+  toolCall?: ToolCall;
+  response?: string;
+  reasoning?: string;
+}
+
+// 工具定义类型（扩展）
+export interface ToolDefinition {
+  name: string;
+  description: string;
+  parameters: z.ZodSchema;
+  handler: ToolHandler;
+  enabled?: boolean;
+  isEnabled?: (context?: Record<string, unknown>) => boolean | Promise<boolean>;
 }
 
 // 工作流状态类型
@@ -143,8 +168,8 @@ export interface EnvConfig {
 
 // 上下文管理器类型
 export interface ContextManager {
-  get(key: string): Promise<any>;
-  set(key: string, value: any): Promise<void>;
+  get(key: string): Promise<unknown>;
+  set(key: string, value: unknown): Promise<void>;
   delete(key: string): Promise<void>;
   clear(): Promise<void>;
 }
@@ -154,7 +179,7 @@ export class AgentError extends Error {
   constructor(
     message: string,
     public code: string,
-    public details?: any
+    public details?: unknown
   ) {
     super(message);
     this.name = 'AgentError';
@@ -165,18 +190,23 @@ export class ToolError extends Error {
   constructor(
     message: string,
     public toolName: string,
-    public details?: any
+    public code?: string,
+    public details?: unknown
   ) {
     super(message);
     this.name = 'ToolError';
   }
 }
 
+// 导出错误代码
+export { ERROR_CODES } from './ErrorCodes';
+export type { ErrorCode } from './ErrorCodes';
+
 export class ConfigError extends Error {
   constructor(
     message: string,
     public configPath: string,
-    public details?: any
+    public details?: unknown
   ) {
     super(message);
     this.name = 'ConfigError';

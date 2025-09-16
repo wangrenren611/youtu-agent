@@ -9,6 +9,7 @@ import { searchTools } from './SearchTool';
 import { codeExecutorTools } from './CodeExecutorTool';
 import { imageTools } from './ImageTool';
 import { dataTools } from './DataTool';
+import { databaseTool } from './DatabaseTool';
 
 // 所有内置工具
 export const builtinTools: ToolDefinition[] = [
@@ -16,7 +17,8 @@ export const builtinTools: ToolDefinition[] = [
   ...searchTools,
   ...codeExecutorTools,
   ...imageTools,
-  ...dataTools
+  ...dataTools,
+  databaseTool
 ];
 
 // 工具名称映射
@@ -34,7 +36,8 @@ export const toolsByCategory = {
   search: searchTools,
   code: codeExecutorTools,
   image: imageTools,
-  data: dataTools
+  data: dataTools,
+  database: [databaseTool]
 };
 
 // 导出所有工具
@@ -43,3 +46,4 @@ export * from './SearchTool';
 export * from './CodeExecutorTool';
 export * from './ImageTool';
 export * from './DataTool';
+export * from './DatabaseTool';

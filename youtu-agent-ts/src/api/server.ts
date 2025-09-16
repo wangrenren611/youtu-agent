@@ -41,7 +41,7 @@ export class APIServer {
     
     // CORS中间件
     this.app.use(cors({
-      origin: process.env.CORS_ORIGIN || '*',
+      origin: process.env['CORS_ORIGIN'] || '*',
       credentials: true
     }));
     
@@ -56,7 +56,7 @@ export class APIServer {
     this.app.use('/ui', express.static(path.join(__dirname, '../ui')));
     
     // 请求日志中间件
-    this.app.use((req, res, next) => {
+    this.app.use((req, _res, next) => {
       logger.info(`${req.method} ${req.path}`, {
         ip: req.ip,
         userAgent: req.get('User-Agent')
@@ -70,12 +70,12 @@ export class APIServer {
    */
   private setupRoutes(): void {
     // 根路径重定向到UI
-    this.app.get('/', (req, res) => {
+    this.app.get('/', (_req, res) => {
       res.redirect('/ui/');
     });
 
     // 健康检查
-    this.app.get('/health', (req, res) => {
+    this.app.get('/health', (_req, res) => {
       res.json({
         status: 'healthy',
         timestamp: new Date().toISOString(),
@@ -84,18 +84,32 @@ export class APIServer {
     });
 
     // 获取框架信息
-    this.app.get('/api/info', (req, res) => {
+    this.app.get('/api/info', (_req, res) => {
       res.json(youtuAgent.getInfo());
     });
 
     // 获取智能体列表
-    this.app.get('/api/agents', (req, res) => {
-      const agents = youtuAgent.getAllAgents().map(agent => ({
-        type: agent.getType(),
-        name: agent.getName(),
-        isReady: agent.isReady()
-      }));
-      res.json({ agents });
+    this.app.get('/api/agents', (_req, res) => {
+      try {
+        const agents = youtuAgent.getAllAgents().map(agent => ({
+          type: agent.getType(),
+          name: agent.getName(),
+          isReady: agent.isReady()
+        }));
+        
+        logger.info(`获取智能体列表: ${agents.length} 个智能体`);
+        res.json({ 
+          success: true,
+          agents: agents 
+        });
+      } catch (error) {
+        logger.error('获取智能体列表失败:', error);
+        res.status(500).json({
+          success: false,
+          error: error instanceof Error ? error.message : '未知错误',
+          agents: []
+        });
+      }
     });
 
     // 创建智能体
@@ -133,7 +147,7 @@ export class APIServer {
         });
       }
       
-      res.json({
+      return res.json({
         success: true,
         agent: {
           type: agent.getType(),
@@ -159,7 +173,7 @@ export class APIServer {
         
         const result = await agent.run(input, traceId);
         
-        res.json({
+        return res.json({
           success: true,
           result: {
             id: result.id,
@@ -174,7 +188,7 @@ export class APIServer {
         });
       } catch (error) {
         logger.error('运行智能体失败:', error);
-        res.status(500).json({
+        return res.status(500).json({
           success: false,
           error: error instanceof Error ? error.message : '未知错误'
         });
@@ -182,7 +196,7 @@ export class APIServer {
     });
 
     // 获取工具列表
-    this.app.get('/api/tools', (req, res) => {
+    this.app.get('/api/tools', (_req, res) => {
       const toolManager = youtuAgent.getToolManager();
       const tools = toolManager.getAllTools().map(tool => ({
         name: tool.name,
@@ -215,7 +229,7 @@ export class APIServer {
     });
 
     // 错误处理中间件
-    this.app.use((error: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    this.app.use((error: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
       logger.error('API错误:', error);
       res.status(500).json({
         success: false,
@@ -224,7 +238,7 @@ export class APIServer {
     });
 
     // 404处理
-    this.app.use((req, res) => {
+    this.app.use((_req, res) => {
       res.status(404).json({
         success: false,
         error: '接口不存在'

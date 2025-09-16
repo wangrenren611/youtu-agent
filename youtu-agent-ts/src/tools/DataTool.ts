@@ -8,20 +8,20 @@ import { z } from 'zod';
 import { Logger } from '../utils/Logger';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import * as csv from 'csv-parser';
-import { createReadStream, createWriteStream } from 'fs';
+const csv = require('csv-parser');
+import { createReadStream } from 'fs';
 
 const logger = new Logger('DataTool');
 
 // 辅助函数
-async function transformJsonData(filePath: string, parameters: any): Promise<string> {
+async function transformJsonData(filePath: string, _parameters: any): Promise<string> {
   // 简单的JSON数据转换实现
   const data = JSON.parse(await fs.readFile(filePath, 'utf-8'));
   // 这里可以添加具体的转换逻辑
   return JSON.stringify(data, null, 2);
 }
 
-async function queryJsonData(filePath: string, parameters: any): Promise<string> {
+async function queryJsonData(filePath: string, _parameters: any): Promise<string> {
   // 简单的JSON数据查询实现
   const data = JSON.parse(await fs.readFile(filePath, 'utf-8'));
   // 这里可以添加具体的查询逻辑
@@ -80,7 +80,7 @@ const csvProcessHandler: ToolHandler = async (args) => {
         throw new Error(`不支持的CSV操作: ${operation}`);
     }
   } catch (error) {
-    logger.error(`CSV处理失败: ${args.filePath}`, error);
+    logger.error(`CSV处理失败: ${args['filePath']}`, error);
     return JSON.stringify({
       success: false,
       error: error instanceof Error ? error.message : '未知错误'
@@ -110,7 +110,7 @@ const jsonProcessHandler: ToolHandler = async (args) => {
         throw new Error(`不支持的JSON操作: ${operation}`);
     }
   } catch (error) {
-    logger.error(`JSON处理失败: ${args.filePath}`, error);
+    logger.error(`JSON处理失败: ${args['filePath']}`, error);
     return JSON.stringify({
       success: false,
       error: error instanceof Error ? error.message : '未知错误'
@@ -167,7 +167,7 @@ const dataConvertHandler: ToolHandler = async (args) => {
       recordCount: Array.isArray(data) ? data.length : 1
     });
   } catch (error) {
-    logger.error(`数据转换失败: ${args.inputPath}`, error);
+    logger.error(`数据转换失败: ${args['inputPath']}`, error);
     return JSON.stringify({
       success: false,
       error: error instanceof Error ? error.message : '未知错误'
@@ -214,7 +214,7 @@ const dataAnalyzeHandler: ToolHandler = async (args) => {
       recordCount: Array.isArray(data) ? data.length : 1
     });
   } catch (error) {
-    logger.error(`数据分析失败: ${args.filePath}`, error);
+    logger.error(`数据分析失败: ${args['filePath']}`, error);
     return JSON.stringify({
       success: false,
       error: error instanceof Error ? error.message : '未知错误'
@@ -230,7 +230,7 @@ async function readCsvFile(filePath: string, parameters: any): Promise<string> {
   return new Promise((resolve, reject) => {
     createReadStream(filePath)
       .pipe(csv())
-      .on('data', (data) => {
+      .on('data', (data: any) => {
         if (limit && results.length >= limit) {
           return;
         }
@@ -487,7 +487,7 @@ async function readCsvData(filePath: string): Promise<any[]> {
     const results: any[] = [];
     createReadStream(filePath)
       .pipe(csv())
-      .on('data', (data) => results.push(data))
+      .on('data', (data: any) => results.push(data))
       .on('end', () => resolve(results))
       .on('error', reject);
   });
@@ -508,7 +508,7 @@ async function readExcelData(filePath: string): Promise<any[]> {
   ];
 }
 
-async function writeCsvData(filePath: string, data: any[], options: any = {}): Promise<void> {
+async function writeCsvData(filePath: string, data: any[], _options: any = {}): Promise<void> {
   let csvContent = '';
   
   if (data.length > 0) {
@@ -530,7 +530,7 @@ async function writeJsonData(filePath: string, data: any, options: any = {}): Pr
   await fs.writeFile(filePath, content, 'utf-8');
 }
 
-async function writeExcelData(filePath: string, data: any[], options: any = {}): Promise<void> {
+async function writeExcelData(filePath: string, _data: any[], _options: any = {}): Promise<void> {
   // 模拟Excel写入
   // 实际项目中可以使用xlsx等库
   logger.info(`模拟写入Excel文件: ${filePath}`);
@@ -567,7 +567,7 @@ function queryJsonObject(data: any, query: string): any {
   }
 }
 
-function validateAgainstSchema(data: any, schema: any): boolean {
+function validateAgainstSchema(_data: any, _schema: any): boolean {
   // 简单的schema验证
   // 实际项目中应该使用专业的验证库
   return true;
@@ -583,7 +583,7 @@ async function generateDataSummary(data: any[], columns: string[]): Promise<any>
   };
 }
 
-async function calculateStatistics(data: any[], columns: string[]): Promise<any> {
+async function calculateStatistics(_data: any[], _columns: string[]): Promise<any> {
   return {
     mean: {},
     median: {},
@@ -593,14 +593,14 @@ async function calculateStatistics(data: any[], columns: string[]): Promise<any>
   };
 }
 
-async function calculateCorrelation(data: any[], columns: string[]): Promise<any> {
+async function calculateCorrelation(_data: any[], _columns: string[]): Promise<any> {
   return {
     correlationMatrix: {},
     significantCorrelations: []
   };
 }
 
-async function analyzeTrends(data: any[], columns: string[]): Promise<any> {
+async function analyzeTrends(_data: any[], _columns: string[]): Promise<any> {
   return {
     trends: {},
     seasonalPatterns: {},

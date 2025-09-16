@@ -227,10 +227,14 @@ export class HttpLLMClient {
         return {
           content: data.choices[0]?.message?.content || '',
           usage: data.usage ? {
-            promptTokens: data.usage.prompt_tokens,
-            completionTokens: data.usage.completion_tokens,
-            totalTokens: data.usage.total_tokens
-          } : undefined,
+            promptTokens: data.usage.prompt_tokens || 0,
+            completionTokens: data.usage.completion_tokens || 0,
+            totalTokens: data.usage.total_tokens || 0
+          } : {
+            promptTokens: 0,
+            completionTokens: 0,
+            totalTokens: 0
+          },
           model: data.model,
           finishReason: data.choices[0]?.finish_reason
         };
@@ -239,10 +243,14 @@ export class HttpLLMClient {
         return {
           content: data.content[0]?.text || '',
           usage: data.usage ? {
-            promptTokens: data.usage.input_tokens,
-            completionTokens: data.usage.output_tokens,
-            totalTokens: data.usage.input_tokens + data.usage.output_tokens
-          } : undefined,
+            promptTokens: data.usage.input_tokens || 0,
+            completionTokens: data.usage.output_tokens || 0,
+            totalTokens: (data.usage.input_tokens || 0) + (data.usage.output_tokens || 0)
+          } : {
+            promptTokens: 0,
+            completionTokens: 0,
+            totalTokens: 0
+          },
           model: data.model,
           finishReason: data.stop_reason
         };

@@ -50,6 +50,8 @@ export class SimpleLLMClient {
       this.logger.debug(`调用LLM: ${this.config.provider}/${this.config.model}`);
       
       const requestData = this.buildRequestData(messages);
+      this.logger.debug('请求数据:', JSON.stringify(requestData, null, 2));
+      
       const response = await this.makeRequest(requestData);
       
       return this.parseResponse(response);
@@ -81,7 +83,7 @@ export class SimpleLLMClient {
   /**
    * 构建请求数据
    */
-  private buildRequestData(messages: SimpleLLMMessage[], stream: boolean = false): any {
+  private buildRequestData(messages: SimpleLLMMessage[], stream: boolean = false): Record<string, unknown> {
     const temperature = this.config.temperature ?? 0.7;
     const maxTokens = this.config.maxTokens ?? 4000;
 
@@ -188,17 +190,30 @@ export class SimpleLLMClient {
    */
   private parseResponse(response: AxiosResponse): SimpleLLMResponse {
     const data = response.data;
-
-    return {
-      content: data.choices?.[0]?.message?.content || data.content || '',
+    
+    this.logger.debug('原始响应数据:', JSON.stringify(data, null, 2));
+    
+    const content = data.choices?.[0]?.message?.content || data.content || '';
+    this.logger.debug('解析的内容:', content);
+    
+    const result = {
+      content,
       usage: data.usage ? {
         promptTokens: data.usage.prompt_tokens || data.usage.input_tokens || 0,
         completionTokens: data.usage.completion_tokens || data.usage.output_tokens || 0,
         totalTokens: data.usage.total_tokens || (data.usage.input_tokens + data.usage.output_tokens) || 0
-      } : undefined,
+      } : {
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0
+      },
       model: data.model || this.config.model,
       finishReason: data.choices?.[0]?.finish_reason || data.stop_reason
     };
+    
+    this.logger.debug('解析结果:', JSON.stringify(result, null, 2));
+    
+    return result;
   }
 
   /**

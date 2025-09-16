@@ -4,7 +4,7 @@
  */
 
 import { EventEmitter } from 'events';
-import { EvaluationResult, AgentConfig, TaskRecorder } from '../types';
+import { EvaluationResult, AgentConfig } from '../types';
 import { Logger } from '../utils/Logger';
 import { BaseAgent } from '../core/agent/BaseAgent';
 import { AgentFactory } from '../agents';
@@ -52,7 +52,7 @@ export interface EvaluationMetrics {
 export class EvaluationManager extends EventEmitter {
   private readonly logger: Logger;
   private readonly resultsDir: string;
-  private evaluations: Map<string, EvaluationResult[]> = new Map();
+  // private _evaluations: Map<string, EvaluationResult[]> = new Map();
 
   constructor(resultsDir: string = './eval_results') {
     super();

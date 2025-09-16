@@ -55,7 +55,7 @@ const imageGenerateHandler: ToolHandler = async (args) => {
       dimensions: `${width}x${height}`
     });
   } catch (error) {
-    logger.error(`图像生成失败: ${args.prompt}`, error);
+    logger.error(`图像生成失败: ${args['prompt']}`, error);
     return JSON.stringify({
       success: false,
       error: error instanceof Error ? error.message : '未知错误'
@@ -89,7 +89,7 @@ const imageEditHandler: ToolHandler = async (args) => {
       parameters
     });
   } catch (error) {
-    logger.error(`图像编辑失败: ${args.imagePath}`, error);
+    logger.error(`图像编辑失败: ${args['imagePath']}`, error);
     return JSON.stringify({
       success: false,
       error: error instanceof Error ? error.message : '未知错误'
@@ -122,7 +122,7 @@ const imageAnalyzeHandler: ToolHandler = async (args) => {
       results: analysis
     });
   } catch (error) {
-    logger.error(`图像分析失败: ${args.imagePath}`, error);
+    logger.error(`图像分析失败: ${args['imagePath']}`, error);
     return JSON.stringify({
       success: false,
       error: error instanceof Error ? error.message : '未知错误'
@@ -135,8 +135,8 @@ async function generateImage(
   prompt: string,
   width: number,
   height: number,
-  style: string,
-  quality: number
+  _style: string,
+  _quality: number
 ): Promise<{ filename: string; path: string; size: number }> {
   // 创建输出目录
   const outputDir = path.join(process.cwd(), 'generated_images');
@@ -225,7 +225,7 @@ async function analyzeImage(
 }
 
 // 创建模拟图像数据
-function createMockImageData(width: number, height: number, prompt: string): Buffer {
+function createMockImageData(width: number, height: number, _prompt: string): Buffer {
   // 创建一个简单的PNG图像数据
   // 实际项目中这里会是真实的图像生成结果
   const canvas = Buffer.alloc(width * height * 4); // RGBA
@@ -271,14 +271,14 @@ async function mockApplyFilter(inputPath: string, outputPath: string, params: an
 }
 
 async function mockAddText(inputPath: string, outputPath: string, params: any): Promise<void> {
-  const { text, x, y, fontSize, color } = params;
+  const { text, x, y } = params;
   logger.info(`模拟添加文字: "${text}" at (${x}, ${y})`);
   // 实际实现会使用图像处理库
   await fs.copyFile(inputPath, outputPath);
 }
 
 // 模拟图像分析操作
-function mockObjectDetection(imagePath: string): any {
+function mockObjectDetection(_imagePath: string): any {
   return {
     objects: [
       { name: 'person', confidence: 0.95, bbox: [100, 50, 200, 300] },
@@ -288,7 +288,7 @@ function mockObjectDetection(imagePath: string): any {
   };
 }
 
-function mockFaceDetection(imagePath: string): any {
+function mockFaceDetection(_imagePath: string): any {
   return {
     faces: [
       { confidence: 0.92, age: 25, gender: 'female', emotions: ['happy', 'confident'] },
@@ -298,7 +298,7 @@ function mockFaceDetection(imagePath: string): any {
   };
 }
 
-function mockTextRecognition(imagePath: string): any {
+function mockTextRecognition(_imagePath: string): any {
   return {
     text: [
       { text: 'Hello World', confidence: 0.95, bbox: [50, 50, 200, 30] },
@@ -308,7 +308,7 @@ function mockTextRecognition(imagePath: string): any {
   };
 }
 
-function mockColorAnalysis(imagePath: string): any {
+function mockColorAnalysis(_imagePath: string): any {
   return {
     dominantColors: [
       { color: '#FF5733', percentage: 35 },
@@ -320,7 +320,7 @@ function mockColorAnalysis(imagePath: string): any {
   };
 }
 
-function mockGeneralAnalysis(imagePath: string): any {
+function mockGeneralAnalysis(_imagePath: string): any {
   return {
     dimensions: { width: 1920, height: 1080 },
     format: 'PNG',

@@ -185,6 +185,10 @@ async function executeShellCommand(command: string, timeout: number, workingDir?
   const cmd = parts[0];
   const args = parts.slice(1);
   
+  if (!cmd) {
+    throw new Error('命令不能为空');
+  }
+  
   return executeCommand(cmd, args, timeout, tempDir);
 }
 

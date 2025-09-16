@@ -126,7 +126,7 @@ export class TraceManager extends EventEmitter {
       eventType,
       timestamp: new Date(),
       data,
-      duration
+      duration: duration || 0
     };
 
     session.events.push(event);
@@ -257,7 +257,7 @@ export class TraceManager extends EventEmitter {
     if (filter.agentName) {
       results = results.filter(session => 
         session.events.some(event => 
-          event.data.agentName === filter.agentName
+          event.data['agentName'] === filter.agentName
         )
       );
     }

@@ -4,7 +4,7 @@
  */
 
 import { EventEmitter } from 'events';
-import { ToolDefinition, ToolHandler, ToolError } from '../../types';
+import { ToolDefinition, ToolError } from '../../types';
 import { Logger } from '../../utils/Logger';
 import { z } from 'zod';
 
@@ -37,6 +37,51 @@ export class ToolManager extends EventEmitter {
    */
   registerTools(tools: ToolDefinition[]): void {
     tools.forEach(tool => this.registerTool(tool));
+  }
+
+  /**
+   * 加载工具（从配置或外部源）
+   * @param toolName 工具名称
+   * @returns 工具定义或null
+   */
+  async loadTool(toolName: string): Promise<ToolDefinition | null> {
+    try {
+      // 首先检查是否已经注册
+      const existingTool = this.tools.get(toolName);
+      if (existingTool) {
+        return existingTool;
+      }
+
+      // 尝试从配置管理器加载
+      const config = await this.loadToolConfig(toolName);
+      if (config) {
+        const tool = this.createToolFromConfig(config);
+        this.registerTool(tool);
+        return tool;
+      }
+
+      // 尝试从内置工具加载
+      const builtinTool = await this.loadBuiltinTool(toolName);
+      if (builtinTool) {
+        this.registerTool(builtinTool);
+        return builtinTool;
+      }
+
+      this.logger.warn(`无法加载工具: ${toolName}`);
+      return null;
+    } catch (error) {
+      this.logger.error(`加载工具失败: ${toolName}`, error);
+      return null;
+    }
+  }
+
+  /**
+   * 批量加载工具
+   * @param toolNames 工具名称数组
+   */
+  async loadTools(toolNames: string[]): Promise<void> {
+    const loadPromises = toolNames.map(name => this.loadTool(name));
+    await Promise.all(loadPromises);
   }
 
   /**
@@ -109,6 +154,7 @@ export class ToolManager extends EventEmitter {
         throw new ToolError(
           `工具 ${name} 参数验证失败: ${error.errors.map(e => e.message).join(', ')}`,
           name,
+          'TOOL_VALIDATION_FAILED',
           error.errors
         );
       }
@@ -116,6 +162,7 @@ export class ToolManager extends EventEmitter {
       throw new ToolError(
         `工具 ${name} 执行失败: ${error instanceof Error ? error.message : '未知错误'}`,
         name,
+        'TOOL_EXECUTION_FAILED',
         error
       );
     }
@@ -213,6 +260,71 @@ export class ToolManager extends EventEmitter {
   cleanup(): void {
     this.clearTools();
     this.removeAllListeners();
+  }
+
+  /**
+   * 从配置加载工具
+   * @param toolName 工具名称
+   * @returns 工具配置或null
+   */
+  private async loadToolConfig(_toolName: string): Promise<any | null> {
+    // 这里应该从配置管理器加载工具配置
+    // 暂时返回null，等待配置管理器实现
+    return null;
+  }
+
+  /**
+   * 从配置创建工具
+   * @param config 工具配置
+   * @returns 工具定义
+   */
+  private createToolFromConfig(config: any): ToolDefinition {
+    // 这里应该根据配置创建工具定义
+    // 暂时返回一个基本的工具定义
+    return {
+      name: config.name,
+      description: config.description || '',
+      parameters: z.object({}),
+      handler: async () => '工具未实现'
+    };
+  }
+
+  /**
+   * 加载内置工具
+   * @param toolName 工具名称
+   * @returns 工具定义或null
+   */
+  private async loadBuiltinTool(toolName: string): Promise<ToolDefinition | null> {
+    // 这里应该加载内置工具
+    // 暂时返回一些示例工具
+    const builtinTools: Record<string, ToolDefinition> = {
+      'search': {
+        name: 'search',
+        description: '搜索网络信息',
+        parameters: z.object({
+          query: z.string().describe('搜索查询')
+        }),
+        handler: async (args) => `搜索结果: ${args['query']}`
+      },
+      'calculator': {
+        name: 'calculator',
+        description: '执行数学计算',
+        parameters: z.object({
+          expression: z.string().describe('数学表达式')
+        }),
+        handler: async (args) => {
+          try {
+            // 简单的计算器实现（仅用于演示）
+            const result = eval(args['expression']);
+            return `计算结果: ${result}`;
+          } catch (error) {
+            return `计算错误: ${error instanceof Error ? error.message : '未知错误'}`;
+          }
+        }
+      }
+    };
+
+    return builtinTools[toolName] || null;
   }
 
   /**

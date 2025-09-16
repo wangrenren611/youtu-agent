@@ -1,0 +1,13 @@
+{
+  "type": "simple",
+  "name": "test_agent",
+  "model": {
+    "provider": "openai",
+    "model": "gpt-3.5-turbo",
+    "apiKey": "test-key",
+    "timeout": 5000
+  },
+  "tools": ["file_read", "file_write"],
+  "maxTurns": 5,
+  "temperature": 0.7
+}

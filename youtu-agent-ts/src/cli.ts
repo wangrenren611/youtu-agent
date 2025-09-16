@@ -9,7 +9,6 @@ import { Command } from 'commander';
 import { APIServer } from './api/server';
 import youtuAgent from './index';
 import { Logger } from './utils/Logger';
-import * as path from 'path';
 
 const logger = new Logger('CLI');
 const program = new Command();
@@ -57,7 +56,7 @@ program
   .command('example')
   .description('运行示例程序')
   .option('-c, --config <config>', '配置文件路径', 'configs/agents/simple.yaml')
-  .action(async (options) => {
+  .action(async () => {
     try {
       logger.info('正在运行示例程序...');
       
@@ -73,9 +72,7 @@ program
       
       // 运行示例对话
       const examples = [
-        '你好，请介绍一下你自己',
         '帮我创建一个名为hello.txt的文件，内容是"Hello World"',
-        '搜索一下最新的AI技术发展'
       ];
       
       for (const input of examples) {

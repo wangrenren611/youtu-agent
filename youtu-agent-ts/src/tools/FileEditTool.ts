@@ -7,9 +7,20 @@ import { ToolDefinition, ToolHandler } from '../types';
 import { z } from 'zod';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { glob } from 'glob';
 import { Logger } from '../utils/Logger';
 
 const logger = new Logger('FileEditTool');
+
+// 允许访问的目录配置
+const ALLOWED_DIRECTORIES = [
+  process.cwd(), // 当前工作目录
+  path.join(process.cwd(), 'data'), // 数据目录
+  path.join(process.cwd(), 'temp'), // 临时目录
+  path.join(process.cwd(), 'logs'), // 日志目录
+  '/tmp', // 系统临时目录
+  path.join(process.env['HOME'] || '', 'Downloads'), // 用户下载目录
+];
 
 // 文件操作参数模式
 const FileReadSchema = z.object({
@@ -42,14 +53,64 @@ const FileInfoSchema = z.object({
   filePath: z.string().describe('要获取信息的文件路径')
 });
 
+const FileGlobSchema = z.object({
+  pattern: z.string().describe('glob模式，如 "**/*.txt" 或 "src/**/*.js"'),
+  baseDir: z.string().optional().describe('基础目录，默认为当前工作目录'),
+  options: z.object({
+    ignore: z.array(z.string()).optional().describe('要忽略的模式'),
+    dot: z.boolean().optional().default(false).describe('是否包含隐藏文件'),
+    nodir: z.boolean().optional().default(false).describe('是否只返回文件，不返回目录'),
+    absolute: z.boolean().optional().default(false).describe('是否返回绝对路径')
+  }).optional().describe('glob选项')
+});
+
+const FileBatchSchema = z.object({
+  operation: z.enum(['read', 'write', 'delete', 'info']).describe('批量操作类型'),
+  pattern: z.string().describe('glob模式'),
+  baseDir: z.string().optional().describe('基础目录'),
+  content: z.string().optional().describe('写入内容（仅write操作需要）'),
+  encoding: z.string().optional().default('utf-8').describe('文件编码')
+});
+
+// 安全检查函数 - 只允许在允许的目录中操作
+function isPathAllowed(filePath: string): boolean {
+  // 处理波浪号路径
+  const normalizedPath = filePath.startsWith('~') 
+    ? path.join(process.env['HOME'] || '', filePath.slice(1))
+    : filePath;
+  
+  const resolvedPath = path.resolve(normalizedPath);
+  
+  // 检查是否在允许的目录中
+  for (const allowedDir of ALLOWED_DIRECTORIES) {
+    if (resolvedPath.startsWith(allowedDir)) {
+      return true;
+    }
+  }
+  
+  return false;
+}
+
+// 验证路径安全性
+function validatePath(filePath: string): void {
+  if (!isPathAllowed(filePath)) {
+    throw new Error(`访问被拒绝: 路径 "${filePath}" 不在允许的目录中。允许的目录: ${ALLOWED_DIRECTORIES.join(', ')}`);
+  }
+}
+
 // 文件读取处理器
 const fileReadHandler: ToolHandler = async (args) => {
   try {
-    const { filePath, encoding } = args;
+    // 验证和解析参数
+    const parsed = FileReadSchema.parse(args);
+    const { filePath, encoding } = parsed;
+    
+    // 安全检查
+    validatePath(filePath);
     
     logger.info(`读取文件: ${filePath}`);
     
-    const content = await fs.readFile(filePath, encoding);
+    const content = await fs.readFile(filePath, { encoding: encoding as BufferEncoding });
     
     logger.info(`文件读取成功: ${filePath}, 大小: ${content.length} 字符`);
     
@@ -60,7 +121,7 @@ const fileReadHandler: ToolHandler = async (args) => {
       encoding
     });
   } catch (error) {
-    logger.error(`文件读取失败: ${args.filePath}`, error);
+    logger.error(`文件读取失败: ${args['filePath']}`, error);
     return JSON.stringify({
       success: false,
       error: error instanceof Error ? error.message : '未知错误'
@@ -71,7 +132,12 @@ const fileReadHandler: ToolHandler = async (args) => {
 // 文件写入处理器
 const fileWriteHandler: ToolHandler = async (args) => {
   try {
-    const { filePath, content, encoding, createDir } = args;
+    // 验证和解析参数
+    const parsed = FileWriteSchema.parse(args);
+    const { filePath, content, encoding, createDir } = parsed;
+    
+    // 安全检查
+    validatePath(filePath);
     
     logger.info(`写入文件: ${filePath}`);
     
@@ -81,7 +147,7 @@ const fileWriteHandler: ToolHandler = async (args) => {
       await fs.mkdir(dirPath, { recursive: true });
     }
     
-    await fs.writeFile(filePath, content, encoding);
+    await fs.writeFile(filePath, content, { encoding: encoding as BufferEncoding });
     
     logger.info(`文件写入成功: ${filePath}, 大小: ${content.length} 字符`);
     
@@ -91,7 +157,7 @@ const fileWriteHandler: ToolHandler = async (args) => {
       encoding
     });
   } catch (error) {
-    logger.error(`文件写入失败: ${args.filePath}`, error);
+    logger.error(`文件写入失败: ${args['filePath']}`, error);
     return JSON.stringify({
       success: false,
       error: error instanceof Error ? error.message : '未知错误'
@@ -102,7 +168,12 @@ const fileWriteHandler: ToolHandler = async (args) => {
 // 文件删除处理器
 const fileDeleteHandler: ToolHandler = async (args) => {
   try {
-    const { filePath } = args;
+    // 验证和解析参数
+    const parsed = FileDeleteSchema.parse(args);
+    const { filePath } = parsed;
+    
+    // 安全检查
+    validatePath(filePath);
     
     logger.info(`删除文件: ${filePath}`);
     
@@ -114,7 +185,7 @@ const fileDeleteHandler: ToolHandler = async (args) => {
       success: true
     });
   } catch (error) {
-    logger.error(`文件删除失败: ${args.filePath}`, error);
+    logger.error(`文件删除失败: ${args['filePath']}`, error);
     return JSON.stringify({
       success: false,
       error: error instanceof Error ? error.message : '未知错误'
@@ -125,7 +196,12 @@ const fileDeleteHandler: ToolHandler = async (args) => {
 // 文件列表处理器
 const fileListHandler: ToolHandler = async (args) => {
   try {
-    const { dirPath, recursive, includeHidden } = args;
+    // 验证和解析参数
+    const parsed = FileListSchema.parse(args);
+    const { dirPath, recursive, includeHidden } = parsed;
+    
+    // 安全检查
+    validatePath(dirPath);
     
     logger.info(`列出目录: ${dirPath}`);
     
@@ -139,7 +215,7 @@ const fileListHandler: ToolHandler = async (args) => {
       count: files.length
     });
   } catch (error) {
-    logger.error(`目录列出失败: ${args.dirPath}`, error);
+    logger.error(`目录列出失败: ${args['dirPath']}`, error);
     return JSON.stringify({
       success: false,
       error: error instanceof Error ? error.message : '未知错误'
@@ -150,7 +226,12 @@ const fileListHandler: ToolHandler = async (args) => {
 // 文件存在检查处理器
 const fileExistsHandler: ToolHandler = async (args) => {
   try {
-    const { filePath } = args;
+    // 验证和解析参数
+    const parsed = FileExistsSchema.parse(args);
+    const { filePath } = parsed;
+    
+    // 安全检查
+    validatePath(filePath);
     
     logger.info(`检查文件存在: ${filePath}`);
     
@@ -162,7 +243,7 @@ const fileExistsHandler: ToolHandler = async (args) => {
       path: filePath
     });
   } catch (error) {
-    logger.error(`文件存在检查失败: ${args.filePath}`, error);
+    logger.error(`文件存在检查失败: ${args['filePath']}`, error);
     return JSON.stringify({
       success: false,
       error: error instanceof Error ? error.message : '未知错误'
@@ -173,7 +254,12 @@ const fileExistsHandler: ToolHandler = async (args) => {
 // 文件信息处理器
 const fileInfoHandler: ToolHandler = async (args) => {
   try {
-    const { filePath } = args;
+    // 验证和解析参数
+    const parsed = FileInfoSchema.parse(args);
+    const { filePath } = parsed;
+    
+    // 安全检查
+    validatePath(filePath);
     
     logger.info(`获取文件信息: ${filePath}`);
     
@@ -197,7 +283,7 @@ const fileInfoHandler: ToolHandler = async (args) => {
       info
     });
   } catch (error) {
-    logger.error(`文件信息获取失败: ${args.filePath}`, error);
+    logger.error(`文件信息获取失败: ${args['filePath']}`, error);
     return JSON.stringify({
       success: false,
       error: error instanceof Error ? error.message : '未知错误'
@@ -257,6 +343,154 @@ async function fileExists(filePath: string): Promise<boolean> {
   }
 }
 
+// Glob搜索处理器
+const fileGlobHandler: ToolHandler = async (args) => {
+  try {
+    const parsed = FileGlobSchema.parse(args);
+    const pattern = parsed.pattern;
+    const baseDir = parsed.baseDir || process.cwd();
+    const options = parsed.options || {};
+    
+    // 安全检查基础目录
+    logger.info(`检查路径安全性: ${baseDir}`);
+    validatePath(baseDir);
+    logger.info(`路径安全检查通过: ${baseDir}`);
+    
+    logger.info(`Glob搜索: ${pattern} 在目录 ${baseDir}`);
+    
+    const globOptions = {
+      cwd: baseDir,
+      ignore: (options as any).ignore || ['node_modules/**', '.git/**', 'dist/**', 'build/**'],
+      dot: (options as any).dot || false,
+      nodir: (options as any).nodir || false,
+      absolute: (options as any).absolute || false
+    };
+    
+    // 使用glob@11的新API
+    const files = await glob(pattern, globOptions);
+    
+    // 对每个文件进行安全检查
+    const safeFiles = files.filter(file => {
+      const fullPath = ((options as any).absolute || false) ? file : path.join(baseDir, file);
+      return isPathAllowed(fullPath);
+    });
+    
+    logger.info(`找到 ${safeFiles.length} 个匹配的文件`);
+    
+    return JSON.stringify({
+      success: true,
+      pattern,
+      baseDir,
+      files: safeFiles,
+      count: safeFiles.length,
+      options: globOptions
+    });
+  } catch (error) {
+    logger.error('Glob搜索失败:', error);
+    return JSON.stringify({
+      success: false,
+      error: error instanceof Error ? error.message : '未知错误'
+    });
+  }
+};
+
+// 批量文件操作处理器
+const fileBatchHandler: ToolHandler = async (args) => {
+  try {
+    const parsed = FileBatchSchema.parse(args);
+    const { operation, pattern, baseDir = process.cwd(), content, encoding = 'utf-8' } = parsed;
+    
+    // 安全检查基础目录
+    validatePath(baseDir);
+    
+    logger.info(`批量${operation}操作: ${pattern} 在目录 ${baseDir}`);
+    
+    // 使用glob找到匹配的文件
+    const files = await glob(pattern, {
+      cwd: baseDir,
+      ignore: ['node_modules/**', '.git/**', 'dist/**', 'build/**'],
+      nodir: true // 只处理文件
+    });
+    
+    // 对每个文件进行安全检查
+    const safeFiles = files.filter(file => {
+      const fullPath = path.join(baseDir, file);
+      return isPathAllowed(fullPath);
+    });
+    
+    const results: any[] = [];
+    
+    for (const file of safeFiles) {
+      const fullPath = path.join(baseDir, file);
+      
+      try {
+        let result: any = { file, success: true };
+        
+        switch (operation) {
+          case 'read':
+            const fileContent = await fs.readFile(fullPath, { encoding: encoding as BufferEncoding });
+            result.content = fileContent;
+            result.size = fileContent.length;
+            break;
+            
+          case 'write':
+            if (!content) {
+              throw new Error('写入操作需要提供content参数');
+            }
+            await fs.writeFile(fullPath, content, { encoding: encoding as BufferEncoding });
+            result.size = content.length;
+            break;
+            
+          case 'delete':
+            await fs.unlink(fullPath);
+            result.deleted = true;
+            break;
+            
+          case 'info':
+            const stats = await fs.stat(fullPath);
+            result.info = {
+              size: stats.size,
+              isFile: stats.isFile(),
+              isDirectory: stats.isDirectory(),
+              mtime: stats.mtime,
+              ctime: stats.ctime
+            };
+            break;
+        }
+        
+        results.push(result);
+      } catch (error) {
+        results.push({
+          file,
+          success: false,
+          error: error instanceof Error ? error.message : '未知错误'
+        });
+      }
+    }
+    
+    logger.info(`批量操作完成: ${results.length} 个文件处理完成`);
+    
+    return JSON.stringify({
+      success: true,
+      operation,
+      pattern,
+      baseDir,
+      totalFiles: safeFiles.length,
+      results,
+      summary: {
+        successful: results.filter(r => r.success).length,
+        failed: results.filter(r => !r.success).length
+      }
+    });
+  } catch (error) {
+    logger.error('批量操作失败:', error);
+    return JSON.stringify({
+      success: false,
+      error: error instanceof Error ? error.message : '未知错误'
+    });
+  }
+};
+
 // 导出工具定义
 export const fileEditTools: ToolDefinition[] = [
   {
@@ -294,5 +528,17 @@ export const fileEditTools: ToolDefinition[] = [
     description: '获取文件信息',
     parameters: FileInfoSchema,
     handler: fileInfoHandler
+  },
+  {
+    name: 'file_glob',
+    description: '使用glob模式搜索文件',
+    parameters: FileGlobSchema,
+    handler: fileGlobHandler
+  },
+  {
+    name: 'file_batch',
+    description: '批量文件操作（读取、写入、删除、获取信息）',
+    parameters: FileBatchSchema,
+    handler: fileBatchHandler
   }
 ];

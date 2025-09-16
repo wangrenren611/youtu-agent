@@ -20,9 +20,11 @@ export class AgentFactory {
   /**
    * 创建智能体
    * @param config 智能体配置
+   * @param toolManager 工具管理器实例
+   * @param configManager 配置管理器实例
    * @returns 智能体实例
    */
-  static async createAgent(config: AgentConfig): Promise<BaseAgent> {
+  static async createAgent(config: AgentConfig, toolManager?: any, configManager?: any): Promise<BaseAgent> {
     const agentId = `${config.type}:${config.name}`;
     
     // 如果智能体已存在，返回现有实例
@@ -38,10 +40,10 @@ export class AgentFactory {
     try {
       switch (config.type) {
         case 'simple':
-          agent = new SimpleAgent(config);
+          agent = new SimpleAgent(config, toolManager, configManager);
           break;
         case 'orchestra':
-          agent = new OrchestraAgent(config);
+          agent = new OrchestraAgent(config, toolManager, configManager);
           break;
         case 'workforce':
           // TODO: 实现WorkforceAgent
@@ -96,8 +98,8 @@ export class AgentFactory {
     return Array.from(this.agents.entries()).map(([id, agent]) => {
       const [type, name] = id.split(':');
       return {
-        type,
-        name,
+        type: type || 'unknown',
+        name: name || 'unknown',
         isReady: agent.isReady()
       };
     });

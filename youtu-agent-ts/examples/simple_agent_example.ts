@@ -37,33 +37,9 @@ async function main() {
 
     // 运行智能体
     console.log('🤖 开始与智能体对话...');
-    
-    const testInputs = [
-      '你好，请介绍一下你自己',
-      '帮我创建一个名为test.txt的文件，内容是"Hello World"',
-      '搜索一下最新的AI技术发展'
-    ];
 
-    for (const input of testInputs) {
-      console.log(`\n👤 用户: ${input}`);
-      
-      try {
-        const result = await agent.run(input);
-        console.log(`🤖 智能体: ${result.output}`);
-        
-        if (result.messages.length > 0) {
-          console.log(`📝 对话轮数: ${result.messages.length}`);
-        }
-        
-        if (result.toolCalls.length > 0) {
-          console.log(`🔧 工具调用: ${result.toolCalls.length}次`);
-        }
-        
-      } catch (error) {
-        console.log(error,"<================>");
-        console.error('❌ 执行失败:', error);
-      }
-    }
+    const result = await agent.run(`帮我创建一个名为test.txt的文件，内容是"Hello World"`);
+    console.log(result,"<================>");
 
     // 获取框架信息
     const frameworkInfo = youtuAgent.getInfo();
