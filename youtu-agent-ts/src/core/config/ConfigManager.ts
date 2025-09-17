@@ -194,8 +194,10 @@ export class ConfigManager {
       tools: config.tools || [],
       maxTurns: config.maxTurns || 20,
       temperature: config.temperature || 0.7,
-      maxTokens: config.maxTokens || 4000
-    };
+      maxTokens: config.maxTokens || 4000,
+      // 透传可选的 ReAct 配置，具体规范由 BaseAgent 进行归一化
+      react: config.react
+    } as AgentConfig;
   }
 
   /**

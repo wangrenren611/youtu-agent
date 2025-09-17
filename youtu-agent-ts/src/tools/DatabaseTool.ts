@@ -9,7 +9,7 @@ import { ToolDefinition } from '../types';
 
 const DatabaseToolSchema = z.object({
   operation: z.enum(['query', 'execute', 'insert', 'update', 'delete']).describe('数据库操作类型'),
-  sql: z.string().describe('SQL语句'),
+  sql: z.string().optional().describe('SQL语句（query/execute 时必填）'),
   params: z.array(z.unknown()).optional().describe('SQL参数'),
   table: z.string().optional().describe('表名（用于insert/update/delete操作）'),
   data: z.record(z.unknown()).optional().describe('数据对象（用于insert/update操作）'),
@@ -23,12 +23,34 @@ class DatabaseToolHandler extends BaseToolHandler {
 
   async handle(args: Record<string, unknown>): Promise<string> {
     return this.wrapHandler(async (args) => {
-      const { operation, sql, params, table, data, where } = DatabaseToolSchema.parse(args);
+      // 兼容不同的参数格式
+      let parsedArgs = args;
       
-      // 获取数据库管理器
-      const { YoutuAgentTS } = await import('../index');
-      const framework = new YoutuAgentTS();
-      const dbManager = framework.getDatabaseManager();
+      // 如果参数格式是 { query: "..." }，转换为 { operation: "query", sql: "..." }
+      if (args['query'] && typeof args['query'] === 'string' && !args['operation']) {
+        parsedArgs = {
+          operation: 'query',
+          sql: args['query'],
+          ...args
+        };
+        delete parsedArgs['query'];
+      }
+      
+      // 如果参数格式是 { execute: "..." }，转换为 { operation: "execute", sql: "..." }
+      if (args['execute'] && typeof args['execute'] === 'string' && !args['operation']) {
+        parsedArgs = {
+          operation: 'execute',
+          sql: args['execute'],
+          ...args
+        };
+        delete parsedArgs['execute'];
+      }
+      
+      const { operation, sql, params, table, data, where } = DatabaseToolSchema.parse(parsedArgs);
+      
+      // 获取数据库管理器 - 使用全局实例
+      const { youtuAgent } = await import('../index');
+      const dbManager = youtuAgent.getDatabaseManager();
       
       if (!dbManager) {
         return this.createErrorResponse('数据库未配置或不可用。请检查DATABASE_URL环境变量是否正确设置，并确保sqlite3模块已正确安装。');
@@ -39,6 +61,9 @@ class DatabaseToolHandler extends BaseToolHandler {
       try {
         switch (operation) {
           case 'query':
+            if (!sql || sql.trim() === '') {
+              throw new Error('query 操作需要提供 sql');
+            }
             const queryResult = await connection.query(sql, params || []);
             return this.createSuccessResponse({
               operation: 'query',
@@ -47,6 +72,9 @@ class DatabaseToolHandler extends BaseToolHandler {
             });
 
           case 'execute':
+            if (!sql || sql.trim() === '') {
+              throw new Error('execute 操作需要提供 sql');
+            }
             const executeResult = await connection.execute(sql, params || []);
             return this.createSuccessResponse({
               operation: 'execute',
@@ -95,6 +123,13 @@ class DatabaseToolHandler extends BaseToolHandler {
         }
       } catch (error) {
         this.logOperationError('数据库操作', error, { operation, sql });
+        this.logger.error('数据库操作详细错误:', error, {
+          operation,
+          sql,
+          table,
+          data,
+          where
+        });
         return this.createErrorResponse(error);
       }
     })(args);

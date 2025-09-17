@@ -1,0 +1,66 @@
+# Workforce Agent Configuration
+# 基于Python版本的workforce配置
+
+type: workforce
+name: workforce_agent
+
+# 基础模型配置
+model:
+  provider: openai
+  model: gpt-4
+  temperature: 0.7
+  maxTokens: 4000
+
+# Workforce特定模型配置
+workforcePlannerModel:
+  provider: openai
+  model: gpt-4
+  temperature: 0.3
+  maxTokens: 2000
+
+workforceAssignerModel:
+  provider: openai
+  model: gpt-4
+  temperature: 0.3
+  maxTokens: 1500
+
+workforceAnswererModel:
+  provider: openai
+  model: gpt-4
+  temperature: 0.1
+  maxTokens: 1000
+
+# 执行器智能体配置
+workforceExecutorAgents:
+  SearchAgent:
+    type: simple
+    name: search_agent
+    model:
+      provider: openai
+      model: gpt-4
+      temperature: 0.7
+      maxTokens: 3000
+    tools:
+      - search
+      - web_search
+    instructions: |
+      You are a web information search specialist that excels at finding relevant information through search tools (Google, Wikipedia, archived pages) and extracting webpage content for understanding. Focuses on information discovery and identifying authoritative sources.
+
+# 执行器配置
+workforceExecutorConfig:
+  maxTries: 2  # 任务执行的最大重试次数
+  returnSummary: true  # 是否返回任务执行摘要
+
+# 执行器信息
+workforceExecutorInfos:
+  - name: SearchAgent
+    description: |
+      A web information search specialist that excels at finding relevant information through search tools (Google, Wikipedia, archived pages) and extracting webpage content for understanding. Focuses on information discovery and identifying authoritative sources.
+    strengths:
+      - Web search and information retrieval
+      - Content extraction and analysis
+      - Source verification and citation
+    weaknesses:
+      - Limited to publicly available information
+      - May not access real-time data
+      - Dependent on search engine results quality

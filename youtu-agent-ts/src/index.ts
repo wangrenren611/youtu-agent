@@ -221,6 +221,7 @@ const youtuAgent = new YoutuAgentTS();
 
 // 导出默认实例和工厂函数
 export default youtuAgent;
+export { youtuAgent };
 
 // 便捷函数
 export const createAgent = youtuAgent.createAgent.bind(youtuAgent);

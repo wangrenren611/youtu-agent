@@ -58,6 +58,25 @@ export interface AgentConfig {
   }>;
   reporterModel?: ModelConfig;
   reporterConfig?: Record<string, any>;
+
+  // Workforce智能体配置
+  workforcePlannerModel?: ModelConfig;
+  workforceAssignerModel?: ModelConfig;
+  workforceAnswererModel?: ModelConfig;
+  workforceExecutorAgents?: Record<string, AgentConfig>;
+  workforceExecutorConfig?: {
+    maxTries?: number;
+    returnSummary?: boolean;
+  };
+  workforceExecutorInfos?: Array<{
+    name: string;
+    description: string;
+    strengths?: string[];
+    weaknesses?: string[];
+  }>;
+
+  // ReAct 配置（可选）
+  react?: ReactConfig;
 }
 
 // 模型配置类型
@@ -69,6 +88,27 @@ export interface ModelConfig {
   temperature?: number;
   maxTokens?: number;
   timeout?: number;
+}
+
+// ReAct 模板配置
+export interface ReactPrompts {
+  reasoning?: string;        // 自定义“推理”阶段提示词模板
+  action?: string;           // 自定义“行动”阶段提示词模板
+  nextInputAppend?: string;  // 自定义“下一轮输入拼接”的模板
+}
+
+// ReAct 行为配置
+export interface ReactConfig {
+  maxTurns?: number;                  // 覆盖全局 maxTurns
+  maxConsecutiveFailures?: number;    // 连续失败的最大次数
+  failureKeywords?: string[];         // 视为失败的关键词（大小写不敏感）
+  reminderTurns?: number;             // 从第几轮开始提醒考虑终止
+  historyWindow?: number;             // 会话历史在提示词中包含的条目数量
+  includeSessionHistory?: boolean;    // 是否在提示词中包含会话历史
+  includeCurrentObservations?: boolean; // 是否在提示词中包含当前任务的观察历史
+  historyMaxSessions?: number;        // 内存中的会话历史保留上限
+  forceJsonAction?: boolean;          // 是否强制行动阶段返回JSON
+  prompts?: ReactPrompts;             // 可选的提示词模板
 }
 
 // 任务记录器类型

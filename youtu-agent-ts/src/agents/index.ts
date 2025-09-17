@@ -6,6 +6,7 @@
 import { BaseAgent } from '../core/agent/BaseAgent';
 import { SimpleAgent } from './SimpleAgent';
 import { OrchestraAgent } from './OrchestraAgent';
+import { WorkforceAgent } from './workforce/WorkforceAgent';
 import { AgentConfig, AgentError } from '../types';
 import { Logger } from '../utils/Logger';
 
@@ -46,8 +47,8 @@ export class AgentFactory {
           agent = new OrchestraAgent(config, toolManager, configManager);
           break;
         case 'workforce':
-          // TODO: 实现WorkforceAgent
-          throw new AgentError('WorkforceAgent尚未实现', 'NOT_IMPLEMENTED');
+          agent = new WorkforceAgent(config, toolManager, configManager);
+          break;
         default:
           throw new AgentError(`未知的智能体类型: ${config.type}`, 'UNKNOWN_AGENT_TYPE');
       }
@@ -198,6 +199,7 @@ export class AgentFactory {
 export { BaseAgent } from '../core/agent/BaseAgent';
 export { SimpleAgent } from './SimpleAgent';
 export { OrchestraAgent } from './OrchestraAgent';
+export { WorkforceAgent } from './workforce/WorkforceAgent';
 
 // 导出工厂函数
 export const createAgent = AgentFactory.createAgent.bind(AgentFactory);

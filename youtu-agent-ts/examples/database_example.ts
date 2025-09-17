@@ -47,8 +47,22 @@ async function main() {
 4. 删除数据
 5. 分析数据并生成报告
 
-请根据用户的需求执行相应的数据库操作。`,
-    maxTurns: 5
+请根据用户的需求执行相应的数据库操作。
+
+使用SQLite时请遵循以下规则：
+- 列出所有表名：SELECT name FROM sqlite_master WHERE type='table';
+- 查看某个表的结构：PRAGMA table_info('表名');
+- 严禁使用“.tables”等SQLite命令行专用指令，只能使用标准SQL/PRAGMA。
+- insert/update/delete 时可仅提供表名与数据，由工具自动构建参数化SQL。
+- query/execute 操作必须提供完整的SQL字符串。
+`,
+    maxTurns: 6,
+    react: {
+      maxTurns: 6,
+      maxConsecutiveFailures: 2,
+      historyWindow: 5,
+      failureKeywords: ['"success":false', '"error"', 'SQLITE_ERROR', 'SQLITE_BUSY', 'SQLITE_LOCKED', 'SQLITE_CONSTRAINT', 'no such table', 'syntax error']
+    }
   };
 
   try {
@@ -61,7 +75,8 @@ async function main() {
     const result1 = await agent.run('请查询数据库中所有的表名，并显示每个表的结构');
     console.log('智能体响应:', result1.output);
     console.log('');
-
+    // 为了加快调试，仅运行示例1
+    return;
     // 示例2: 插入测试数据
     console.log('📝 示例2: 插入测试数据');
     const result2 = await agent.run('请在evaluation_data表中插入一条测试数据，包含以下信息：dataset="test", raw_question="什么是人工智能？", correct_answer="人工智能是计算机科学的一个分支", exp_id="demo_001"');

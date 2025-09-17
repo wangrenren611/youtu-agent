@@ -24,6 +24,7 @@
     "example:database-no-sqlite": "tsx examples/database_example_no_sqlite.ts",
     "example:simple-no-database": "tsx examples/simple_example_no_database.ts",
     "example:glob": "tsx examples/glob_example.ts",
+    "example:workforce": "tsx examples/workforce_example.ts",
     "example:glob-no-database": "tsx examples/glob_example_no_database.ts",
     "install:sqlite3": "bash scripts/install-sqlite3.sh"
   },

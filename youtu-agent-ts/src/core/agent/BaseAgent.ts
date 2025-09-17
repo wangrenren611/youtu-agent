@@ -35,6 +35,24 @@ export abstract class BaseAgent<TContext = any> extends EventEmitter {
   protected context?: TContext;
   protected availableTools: Map<string, ToolDefinition> = new Map();
   private cachedToolDescriptions: string | undefined;
+
+  // ReAct 行为与模板配置（由 config.react 规范化而来）
+  private react!: {
+    maxTurns: number;
+    maxConsecutiveFailures: number;
+    failureKeywords: string[];
+    reminderTurns: number;
+    historyWindow: number;
+    includeSessionHistory: boolean;
+    includeCurrentObservations: boolean;
+    historyMaxSessions: number;
+    forceJsonAction: boolean;
+    prompts: {
+      reasoning?: string;
+      action?: string;
+      nextInputAppend?: string;
+    };
+  };
   
   // 会话管理
   private sessionHistory: TaskRecorder[] = [];
@@ -46,7 +64,22 @@ export abstract class BaseAgent<TContext = any> extends EventEmitter {
     this.logger = new Logger(`Agent:${config.name}`);
     this.toolManager = toolManager || new ToolManager();
     this.configManager = configManager || new ConfigManager();
-    this.maxTurns = config.maxTurns || 10;
+
+    // 规范化 ReAct 配置，减少硬编码
+    const r = this.config.react || {} as any;
+    this.react = {
+      maxTurns: r.maxTurns ?? this.config.maxTurns ?? 10,
+      maxConsecutiveFailures: r.maxConsecutiveFailures ?? 3,
+      failureKeywords: (r.failureKeywords ?? ['失败', '错误', 'error', 'fail', 'exception']).map((s: string) => String(s).toLowerCase()),
+      reminderTurns: r.reminderTurns ?? 3,
+      historyWindow: r.historyWindow ?? 3,
+      includeSessionHistory: r.includeSessionHistory ?? true,
+      includeCurrentObservations: r.includeCurrentObservations ?? true,
+      historyMaxSessions: r.historyMaxSessions ?? 10,
+      forceJsonAction: r.forceJsonAction ?? true,
+      prompts: r.prompts ?? {}
+    };
+    this.maxTurns = this.react.maxTurns;
   }
 
   /**
@@ -119,8 +152,8 @@ export abstract class BaseAgent<TContext = any> extends EventEmitter {
 
       // 将完成的任务添加到会话历史中
       this.sessionHistory.push(recorder);
-      // 限制历史记录长度，避免内存泄漏
-      if (this.sessionHistory.length > 10) {
+      // 限制历史记录长度，避免内存泄漏（可配置）
+      if (this.sessionHistory.length > this.react.historyMaxSessions) {
         this.sessionHistory.shift();
       }
 
@@ -135,7 +168,7 @@ export abstract class BaseAgent<TContext = any> extends EventEmitter {
 
       // 即使失败也要记录到历史中，以便智能体了解之前的尝试
       this.sessionHistory.push(recorder);
-      if (this.sessionHistory.length > 10) {
+      if (this.sessionHistory.length > this.react.historyMaxSessions) {
         this.sessionHistory.shift();
       }
 
@@ -269,7 +302,7 @@ export abstract class BaseAgent<TContext = any> extends EventEmitter {
   protected async reactLoop(input: string, recorder: TaskRecorder): Promise<string> {
     let currentInput = input;
     let consecutiveFailures = 0;
-    const maxConsecutiveFailures = 3;
+    const maxConsecutiveFailures = this.react.maxConsecutiveFailures;
     
     for (recorder.turns = 0; recorder.turns < recorder.maxTurns; recorder.turns++) {
       this.logger.info(`ReAct循环 - 第 ${recorder.turns + 1} 轮`);
@@ -288,8 +321,8 @@ export abstract class BaseAgent<TContext = any> extends EventEmitter {
           const observation = await this.observe(action.toolCall, recorder);
           recorder.observations.push(observation);
           
-          // 检查工具执行是否成功
-          if (observation.includes('失败') || observation.includes('错误')) {
+          // 检查工具执行是否成功（可配置的失败关键词）
+          if (this.isFailureObservation(observation)) {
             consecutiveFailures++;
             this.logger.warn(`工具执行失败，连续失败次数: ${consecutiveFailures}`);
             
@@ -473,65 +506,107 @@ export abstract class BaseAgent<TContext = any> extends EventEmitter {
   /**
    * 构建下一轮的输入
    */
-  protected buildNextInput(currentInput: string, observation: string, _recorder: TaskRecorder): string {
-    return `${currentInput}\n\n工具结果: ${observation}`;
+  protected buildNextInput(currentInput: string, observation: string, recorder: TaskRecorder): string {
+    const turnCount = recorder.turns;
+    const hasSuccessfulToolCalls = recorder.toolCalls.length > 0;
+
+    // 优先使用自定义模板
+    if (this.react.prompts.nextInputAppend) {
+      const append = this.applyTemplate(this.react.prompts.nextInputAppend, {
+        observation,
+        toolCallCount: recorder.toolCalls.length,
+        turn: turnCount + 1,
+        maxTurns: this.react.maxTurns
+      });
+      return `${currentInput}\n\n${append}`;
+    }
+
+    let context = `\n\n工具执行结果: ${observation}`;
+    
+    // 如果已经有成功的工具调用，提示智能体考虑是否完成任务
+    if (hasSuccessfulToolCalls) {
+      context += `\n\n注意：你已经成功执行了${recorder.toolCalls.length}个工具调用。请评估是否已经完成了用户的任务。如果任务已完成，请提供最终答案而不是继续调用工具。`;
+    }
+    
+    // 如果轮次较多，提醒智能体考虑终止（可配置）
+    if (turnCount >= this.react.reminderTurns) {
+      context += `\n\n提醒：当前已经是第${turnCount + 1}轮，请考虑是否已经获得足够的信息来完成任务。`;
+    }
+    
+    return `${currentInput}${context}`;
   }
 
   /**
-   * 构建推理提示词
+   * 构建推理提示词（可配置模板）
    */
   protected buildReasoningPrompt(input: string, recorder: TaskRecorder): string {
-    const availableTools = Array.from(this.availableTools.values())
+    const toolsList = Array.from(this.availableTools.values())
       .map(tool => `- ${tool.name}: ${tool.description}`)
       .join('\n');
-    
-    let prompt = `请分析当前情况并决定下一步行动。
 
-当前输入: ${input}
-
-可用工具:
-${availableTools}`;
-
-    // 添加会话历史记录（最近3个任务）
-    if (this.sessionHistory.length > 0) {
-      prompt += `\n\n会话历史:`;
-      this.sessionHistory.slice(-3).forEach((task, i) => {
-        prompt += `\n${i + 1}. 任务: ${task.input}`;
+    // 组装会话历史（可选、窗口大小可配）
+    let sessionHistoryBlock = '';
+    if (this.react.includeSessionHistory && this.sessionHistory.length > 0) {
+      sessionHistoryBlock += `\n\n会话历史:`;
+      this.sessionHistory.slice(-this.react.historyWindow).forEach((task, i) => {
+        sessionHistoryBlock += `\n${i + 1}. 任务: ${task.input}`;
         if (task.status === 'completed') {
-          prompt += ` -> 已完成`;
+          sessionHistoryBlock += ` -> 已完成`;
           if (task.toolCalls.length > 0) {
             const lastToolCall = task.toolCalls[task.toolCalls.length - 1];
             if (lastToolCall) {
-              prompt += ` (使用了${lastToolCall.function.name}工具)`;
+              sessionHistoryBlock += ` (使用了${lastToolCall.function.name}工具)`;
             }
           }
         } else if (task.status === 'failed') {
-          prompt += ` -> 失败: ${task.error}`;
+          sessionHistoryBlock += ` -> 失败: ${task.error}`;
         }
       });
     }
 
-    // 添加当前任务的历史记录
-    if (recorder.observations.length > 0) {
-      prompt += `\n\n当前任务历史记录:
-${recorder.observations.map((obs, i) => `第${i+1}轮结果: ${obs}`).join('\n')}`;
+    // 当前任务观察历史（可选）
+    let obsBlock = '';
+    if (this.react.includeCurrentObservations && recorder.observations.length > 0) {
+      obsBlock += `\n\n当前任务历史记录:\n${recorder.observations.map((obs, i) => `第${i+1}轮结果: ${obs}`).join('\n')}`;
+    }
+
+    // 优先使用自定义模板
+    if (this.react.prompts.reasoning) {
+      return this.applyTemplate(this.react.prompts.reasoning, {
+        input,
+        tools: toolsList,
+        sessionHistory: sessionHistoryBlock,
+        observations: obsBlock,
+        turn: recorder.turns + 1,
+        maxTurns: this.react.maxTurns,
+        toolCallCount: recorder.toolCalls.length
+      });
+    }
+
+    // 默认模板（与原逻辑等价，减少硬编码且受配置控制）
+    let prompt = `请分析当前情况并决定下一步行动。\n\n当前输入: ${input}\n\n可用工具:\n${toolsList}`;
+
+    if (sessionHistoryBlock) {
+      prompt += sessionHistoryBlock;
+    }
+    if (obsBlock) {
+      prompt += obsBlock;
     }
 
     prompt += `\n\n请分析当前情况，考虑是否需要使用工具来完成任务。`;
-    
     return prompt;
   }
 
   /**
-   * 构建行动提示词
+   * 构建行动提示词（可配置模板）
    */
   protected buildActionPrompt(reasoning: string, _recorder: TaskRecorder): string {
     // 使用缓存的工具描述
     if (!this.cachedToolDescriptions) {
       this.cachedToolDescriptions = Array.from(this.availableTools.values())
         .map(tool => {
-          // 获取工具参数schema
-          const params = tool.parameters._def || {};
+          // 获取工具参数schema（保持兼容，必要时可被模板覆盖）
+          const params = (tool as any).parameters?._def || {};
           const paramDesc = Object.keys(params).length > 0 ? 
             `参数: ${JSON.stringify(params, null, 2)}` : '无参数';
           return `- ${tool.name}: ${tool.description}\n  ${paramDesc}`;
@@ -540,29 +615,25 @@ ${recorder.observations.map((obs, i) => `第${i+1}轮结果: ${obs}`).join('\n')
     }
     
     const availableTools = this.cachedToolDescriptions;
+
+    // 优先使用自定义模板
+    if (this.react.prompts.action) {
+      return this.applyTemplate(this.react.prompts.action, {
+        reasoning,
+        tools: availableTools
+      });
+    }
     
-    return `基于以下分析，请决定下一步行动:
+    // 默认模板（受 forceJsonAction 控制）
+    let base = `基于以下分析，请决定下一步行动:\n\n分析: ${reasoning}\n\n可用工具:\n${availableTools}`;
 
-分析: ${reasoning}
+    if (this.react.forceJsonAction) {
+      base += `\n\n如果需要使用工具，请严格按照以下JSON格式调用:\n{\n  "name": "工具名称",\n  "arguments": "{\"参数名\": \"参数值\"}"\n}\n\n示例:\n{\n  "name": "file_write",\n  "arguments": "{\"filePath\": \"hello.txt\", \"content\": \"Hello World\"}"\n}\n\n如果任务已经完成，或者不需要更多工具调用，请直接提供最终答案，不要调用工具。\n\n重要：必须返回有效的JSON格式，不要包含其他文字。`;
+    } else {
+      base += `\n\n如果需要使用工具，请明确说明要调用的工具及其参数；如果任务已完成，请直接给出最终答案。`;
+    }
 
-可用工具:
-${availableTools}
-
-如果需要使用工具，请严格按照以下JSON格式调用:
-{
-  "name": "工具名称",
-  "arguments": "{\"参数名\": \"参数值\"}"
-}
-
-示例:
-{
-  "name": "file_write",
-  "arguments": "{\"filePath\": \"hello.txt\", \"content\": \"Hello World\"}"
-}
-
-如果不需要工具，请直接提供最终答案。
-
-重要：必须返回有效的JSON格式，不要包含其他文字。`;
+    return base;
   }
 
   /**
@@ -709,6 +780,20 @@ ${availableTools}
   /**
    * 子类需要实现的抽象方法
    */
+  // 可配置的失败检测
+  private isFailureObservation(text: string): boolean {
+    const lower = String(text ?? '').toLowerCase();
+    return this.react.failureKeywords.some((k) => lower.includes(k));
+  }
+
+  // 简单模板渲染：支持 {{var}}
+  private applyTemplate(template: string, vars: Record<string, string | number>): string {
+    return template.replace(/\{\{(\w+)\}\}/g, (_m, key: string) => {
+      const v = (vars as any)[key];
+      return v === undefined || v === null ? '' : String(v);
+    });
+  }
+
   protected abstract onInitialize(): Promise<void>;
   protected abstract onCleanup(): Promise<void>;
 }

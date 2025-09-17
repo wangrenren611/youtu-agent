@@ -42,7 +42,15 @@ export abstract class BaseToolHandler {
         this.logger.debug('工具调用成功');
         return result;
       } catch (error) {
-        this.logger.error('工具调用失败:', error);
+        this.logger.error('工具调用失败:', error, {
+          args: args
+        });
+        // 额外输出错误信息到控制台，确保能看到
+        console.error('工具调用详细错误:', {
+          error: error instanceof Error ? error.message : error,
+          stack: error instanceof Error ? error.stack : undefined,
+          args: args
+        });
         return this.createErrorResponse(error);
       }
     };
