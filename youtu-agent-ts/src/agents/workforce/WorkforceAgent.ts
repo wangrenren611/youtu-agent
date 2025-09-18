@@ -27,26 +27,38 @@ export class WorkforceAgent extends BaseAgent {
   protected async onInitialize(): Promise<void> {
     this.logger.info('初始化workforce智能体...');
     
-    // 初始化子智能体
-    this.plannerAgent = new PlannerAgent(this.config);
-    this.assignerAgent = new AssignerAgent(this.config);
-    this.answererAgent = new AnswererAgent(this.config);
-    
-    // 初始化子智能体的LLM
-    await this.plannerAgent.initialize();
-    await this.assignerAgent.initialize();
-    await this.answererAgent.initialize();
-    
-    // 初始化执行器智能体组
-    if (this.config.workforceExecutorAgents) {
+    try {
+      // 验证必要配置
+      if (!this.config.workforceExecutorInfos) {
+        throw new Error('缺少必要的 workforceExecutorInfos 配置');
+      }
+      
+      if (!this.config.workforceExecutorAgents) {
+        throw new Error('缺少必要的 workforceExecutorAgents 配置');
+      }
+
+      // 初始化子智能体
+      this.plannerAgent = new PlannerAgent(this.config);
+      this.assignerAgent = new AssignerAgent(this.config);
+      this.answererAgent = new AnswererAgent(this.config);
+      
+      // 初始化子智能体的LLM
+      await this.plannerAgent.initialize();
+      await this.assignerAgent.initialize();
+      await this.answererAgent.initialize();
+      
+      // 初始化执行器智能体组
       for (const [name, executorConfig] of Object.entries(this.config.workforceExecutorAgents)) {
-        const executorAgent = new ExecutorAgent(executorConfig, this.config);
+        const executorAgent = new ExecutorAgent(executorConfig as AgentConfig, this.config);
         this.executorAgentGroup.set(name, executorAgent);
         this.logger.info(`已初始化执行器智能体: ${name}`);
       }
+      
+      this.logger.info('Workforce智能体初始化完成');
+    } catch (error) {
+      this.logger.error('Workforce智能体初始化失败:', error);
+      throw new Error(`Workforce智能体初始化失败: ${error instanceof Error ? error.message : '未知错误'}`);
     }
-    
-    this.logger.info('Workforce智能体初始化完成');
   }
 
   /**
@@ -83,37 +95,45 @@ export class WorkforceAgent extends BaseAgent {
 
       // 2. 执行任务循环
       while (recorder.hasUncompletedTasks) {
-        // 分配任务
-        const nextTask = await this.assignerAgent.assignTask(recorder);
-        this.logger.info(`分配任务: ${nextTask.taskId} 分配给 ${nextTask.assignedAgent}`);
+        try {
+          // 分配任务
+          const nextTask = await this.assignerAgent.assignTask(recorder);
+          this.logger.info(`分配任务: ${nextTask.taskId} 分配给 ${nextTask.assignedAgent}`);
 
-        // 执行任务
-        this.logger.info(`执行任务: ${nextTask.taskId}`);
-        const executorAgent = this.executorAgentGroup.get(nextTask.assignedAgent!);
-        if (!executorAgent) {
-          throw new Error(`执行器智能体不存在: ${nextTask.assignedAgent}`);
-        }
+          // 执行任务
+          this.logger.info(`执行任务: ${nextTask.taskId}`);
+          const executorAgent = this.executorAgentGroup.get(nextTask.assignedAgent!);
+          if (!executorAgent) {
+            throw new Error(`执行器智能体不存在: ${nextTask.assignedAgent}`);
+          }
 
-        await executorAgent.executeTask(recorder, nextTask);
-        this.logger.info(`任务 ${nextTask.taskId} 结果: ${nextTask.taskResult}`);
+          await executorAgent.executeTask(recorder, nextTask);
+          this.logger.info(`任务 ${nextTask.taskId} 结果: ${nextTask.taskResult}`);
 
-        // 检查任务
-        await this.plannerAgent.planCheck(recorder, nextTask);
-        this.logger.info(`任务 ${nextTask.taskId} 检查完成: ${nextTask.taskStatus}`);
+          // 检查任务
+          await this.plannerAgent.planCheck(recorder, nextTask);
+          this.logger.info(`任务 ${nextTask.taskId} 检查完成: ${nextTask.taskStatus}`);
 
-        // 更新计划
-        if (!recorder.hasUncompletedTasks) {
-          break; // 提前停止
-        }
+          // 更新计划
+          if (!recorder.hasUncompletedTasks) {
+            break; // 提前停止
+          }
 
-        const planUpdateChoice = await this.plannerAgent.planUpdate(recorder, nextTask);
-        this.logger.info(`计划更新选择: ${planUpdateChoice}`);
-        
-        if (planUpdateChoice === 'stop') {
-          this.logger.info('规划器确定整体任务已完成，停止执行');
-          break;
-        } else if (planUpdateChoice === 'update') {
-          this.logger.info(`任务计划已更新: ${recorder.formattedTaskPlan}`);
+          const planUpdateChoice = await this.plannerAgent.planUpdate(recorder, nextTask);
+          this.logger.info(`计划更新选择: ${planUpdateChoice}`);
+          
+          if (planUpdateChoice === 'stop') {
+            this.logger.info('规划器确定整体任务已完成，停止执行');
+            break;
+          } else if (planUpdateChoice === 'update') {
+            this.logger.info(`任务计划已更新: ${recorder.formattedTaskPlan}`);
+          }
+        } catch (taskError) {
+          this.logger.error(`任务执行过程中发生错误:`, taskError);
+          // 继续执行其他任务，而不是完全停止
+          recorder.status = 'failed';
+          recorder.error = taskError instanceof Error ? taskError.message : '未知错误';
+          // 可以选择在这里 break; 如果希望在任何任务失败时停止整个流程
         }
       }
 

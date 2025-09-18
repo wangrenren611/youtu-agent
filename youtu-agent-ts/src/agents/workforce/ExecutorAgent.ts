@@ -44,8 +44,6 @@ export class ExecutorAgent {
       try {
         this.logger.info(`执行尝试 ${tries}/${this.maxTries}`);
         
-        // 注意：SimpleAgent没有clearInputItems方法，这里跳过
-        
         // 构建用户提示
         let userPrompt: string;
         if (tries === 1) {

@@ -30,7 +30,13 @@ export class AnswererAgent {
    * 初始化AnswererAgent
    */
   async initialize(): Promise<void> {
-    await this.llm.initialize();
+    try {
+      await this.llm.initialize();
+      this.logger.info('AnswererAgent LLM 初始化成功');
+    } catch (error) {
+      this.logger.error('AnswererAgent LLM 初始化失败:', error);
+      throw new Error(`AnswererAgent LLM 初始化失败: ${error instanceof Error ? error.message : '未知错误'}`);
+    }
   }
 
   /**
@@ -39,18 +45,29 @@ export class AnswererAgent {
   async extractFinalAnswer(recorder: WorkspaceTaskRecorder): Promise<string> {
     this.logger.info('开始提取最终答案...');
     
+    // 检查 LLM 是否已初始化
+    if (!this.llm.isReady()) {
+      throw new Error('AnswererAgent LLM 未初始化');
+    }
+    
     const finalPrompt = formatPrompt(WORKFORCE_PROMPTS.answerer.FINAL_ANSWER_PROMPT, {
       question: recorder.overallTask,
       task_results: recorder.formattedTaskPlanListWithTaskResults.join('\n')
     });
 
-    const finalResult = await this.llm.callLLM(finalPrompt);
-    recorder.addRunResult(finalResult, 'answerer');
-    
-    const finalAnswer = this.parseFinalResponse(finalResult);
-    
-    this.logger.info(`最终答案提取完成: ${finalAnswer}`);
-    return finalAnswer;
+    try {
+      const finalResultObj = await this.llm.run(finalPrompt);
+      const finalResult = finalResultObj.output || '';
+      recorder.addRunResult(finalResult, 'answerer');
+      
+      const finalAnswer = this.parseFinalResponse(finalResult);
+      
+      this.logger.info(`最终答案提取完成: ${finalAnswer}`);
+      return finalAnswer;
+    } catch (error) {
+      this.logger.error('最终答案提取失败:', error);
+      throw new Error(`最终答案提取失败: ${error instanceof Error ? error.message : '未知错误'}`);
+    }
   }
 
   /**
@@ -59,17 +76,28 @@ export class AnswererAgent {
   async answerCheck(question: string, modelAnswer: string, groundTruth: string): Promise<boolean> {
     this.logger.info('开始检查答案...');
     
+    // 检查 LLM 是否已初始化
+    if (!this.llm.isReady()) {
+      throw new Error('AnswererAgent LLM 未初始化');
+    }
+    
     const checkPrompt = formatPrompt(WORKFORCE_PROMPTS.answerer.ANSWER_CHECK_PROMPT, {
       question,
       model_answer: modelAnswer,
       ground_truth: groundTruth
     });
 
-    const checkResult = await this.llm.callLLM(checkPrompt);
-    const isEquivalent = this.parseAnswerCheckResponse(checkResult);
-    
-    this.logger.info(`答案检查完成，是否等价: ${isEquivalent}`);
-    return isEquivalent;
+    try {
+      const checkResultObj = await this.llm.run(checkPrompt);
+      const checkResult = checkResultObj.output || '';
+      const isEquivalent = this.parseAnswerCheckResponse(checkResult);
+      
+      this.logger.info(`答案检查完成，是否等价: ${isEquivalent}`);
+      return isEquivalent;
+    } catch (error) {
+      this.logger.error('答案检查失败:', error);
+      throw new Error(`答案检查失败: ${error instanceof Error ? error.message : '未知错误'}`);
+    }
   }
 
   /**

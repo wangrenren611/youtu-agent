@@ -23,10 +23,18 @@ export class Subtask {
   assignedAgent?: string;
 
   constructor(taskId: number, taskName: string, taskDescription?: string) {
+    if (taskId < 0) {
+      throw new Error('Task ID must be a non-negative integer');
+    }
+    
+    if (!taskName || taskName.trim() === '') {
+      throw new Error('Task name cannot be empty');
+    }
+    
     this.taskId = taskId;
-    this.taskName = taskName;
-    if (taskDescription !== undefined) {
-      this.taskDescription = taskDescription;
+    this.taskName = taskName.trim();
+    if (taskDescription !== undefined && taskDescription !== null) {
+      this.taskDescription = taskDescription.trim();
     }
   }
 
@@ -39,7 +47,7 @@ export class Subtask {
       `<task_status>${this.taskStatus}</task_status>`
     ];
     
-    if (this.taskResult !== undefined) {
+    if (this.taskResult !== undefined && this.taskResult !== null) {
       infos.push(`<task_result>${this.taskResult}</task_result>`);
     }
     
@@ -85,10 +93,14 @@ export class WorkspaceTaskRecorder implements TaskRecorder {
   taskPlan: Subtask[] = [];
 
   constructor(overallTask: string, executorAgentKwargsList: ExecutorAgentInfo[], traceId?: string) {
+    if (!overallTask || overallTask.trim() === '') {
+      throw new Error('Overall task cannot be empty');
+    }
+    
     this.id = traceId || this.generateTraceId();
-    this.input = overallTask; // 设置input字段
-    this.overallTask = overallTask;
-    this.executorAgentKwargsList = executorAgentKwargsList;
+    this.input = overallTask.trim();
+    this.overallTask = this.input;
+    this.executorAgentKwargsList = executorAgentKwargsList || [];
     this.startTime = new Date();
   }
 
@@ -135,6 +147,10 @@ export class WorkspaceTaskRecorder implements TaskRecorder {
    * 初始化任务计划
    */
   planInit(planList: Subtask[]): void {
+    if (!Array.isArray(planList)) {
+      throw new Error('Plan list must be an array');
+    }
+    
     this.taskPlan = planList;
   }
 
@@ -142,6 +158,14 @@ export class WorkspaceTaskRecorder implements TaskRecorder {
    * 更新任务计划
    */
   planUpdate(task: Subtask, updatedPlan: string[]): void {
+    if (!task) {
+      throw new Error('Task cannot be null or undefined');
+    }
+    
+    if (!Array.isArray(updatedPlan)) {
+      throw new Error('Updated plan must be an array');
+    }
+    
     const finishedTasks = this.taskPlan.slice(0, task.taskId);
     const newTasks = updatedPlan.map((taskName, i) => 
       new Subtask(task.taskId + i + 1, taskName)
@@ -179,7 +203,7 @@ export class WorkspaceTaskRecorder implements TaskRecorder {
    * 设置最终输出
    */
   setFinalOutput(output: string): void {
-    this.output = output;
+    this.output = output ? output.trim() : '';
     this.status = 'completed';
     this.endTime = new Date();
   }

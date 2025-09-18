@@ -21,7 +21,7 @@ export class PlannerAgent {
       type: 'simple',
       name: 'planner_llm',
       model: config.workforcePlannerModel || config.model,
-      tools: [], // PlannerAgent不需要工具，只需要LLM推理
+      tools: ['web_search'], // PlannerAgent需要web_search工具来执行搜索任务
       instructions: 'You are a task planning specialist.'
     });
   }
@@ -30,7 +30,13 @@ export class PlannerAgent {
    * 初始化PlannerAgent
    */
   async initialize(): Promise<void> {
-    await this.llm.initialize();
+    try {
+      await this.llm.initialize();
+      this.logger.info('PlannerAgent LLM 初始化成功');
+    } catch (error) {
+      this.logger.error('PlannerAgent LLM 初始化失败:', error);
+      throw new Error(`PlannerAgent LLM 初始化失败: ${error instanceof Error ? error.message : '未知错误'}`);
+    }
   }
 
   /**
@@ -39,20 +45,31 @@ export class PlannerAgent {
   async planTask(recorder: WorkspaceTaskRecorder): Promise<void> {
     this.logger.info('开始规划任务...');
     
+    // 检查 LLM 是否已初始化
+    if (!this.llm.isReady()) {
+      throw new Error('PlannerAgent LLM 未初始化');
+    }
+    
     const planPrompt = formatPrompt(WORKFORCE_PROMPTS.planner.TASK_PLAN_PROMPT, {
       overall_task: recorder.overallTask,
       executor_agents_info: recorder.executorAgentsInfo
     });
 
-    // 直接调用LLM，不使用ReAct循环
-    const planResult = await this.llm.callLLM(planPrompt);
-    recorder.addRunResult(planResult, 'planner');
+    try {
+      // 使用 run 方法而不是 callLLM
+      const planResultObj = await this.llm.run(planPrompt);
+      const planResult = planResultObj.output || '';
+      recorder.addRunResult(planResult, 'planner');
 
-    // 解析任务
-    const tasks = this.parseTasks(planResult);
-    recorder.planInit(tasks);
-    
-    this.logger.info(`任务规划完成，生成了 ${tasks.length} 个子任务`);
+      // 解析任务
+      const tasks = this.parseTasks(planResult);
+      recorder.planInit(tasks);
+      
+      this.logger.info(`任务规划完成，生成了 ${tasks.length} 个子任务`);
+    } catch (error) {
+      this.logger.error('任务规划失败:', error);
+      throw new Error(`任务规划失败: ${error instanceof Error ? error.message : '未知错误'}`);
+    }
   }
 
   /**
@@ -60,6 +77,11 @@ export class PlannerAgent {
    */
   async planUpdate(recorder: WorkspaceTaskRecorder, task: Subtask): Promise<string> {
     this.logger.info(`开始更新任务计划，基于任务 ${task.taskId} 的结果`);
+    
+    // 检查 LLM 是否已初始化
+    if (!this.llm.isReady()) {
+      throw new Error('PlannerAgent LLM 未初始化');
+    }
     
     const taskPlanList = recorder.formattedTaskPlanListWithTaskResults;
     const lastTaskId = task.taskId;
@@ -72,17 +94,24 @@ export class PlannerAgent {
       unfinished_task_plan: unfinishedTaskPlan
     });
 
-    const updateResult = await this.llm.callLLM(updatePrompt);
-    recorder.addRunResult(updateResult, 'planner');
-    
-    const { choice, updatedPlan } = this.parseUpdateResponse(updateResult);
-    
-    if (choice === 'update' && updatedPlan) {
-      recorder.planUpdate(task, updatedPlan);
-      this.logger.info('任务计划已更新');
+    try {
+      // 使用 run 方法而不是 callLLM
+      const updateResultObj = await this.llm.run(updatePrompt);
+      const updateResult = updateResultObj.output || '';
+      recorder.addRunResult(updateResult, 'planner');
+      
+      const { choice, updatedPlan } = this.parseUpdateResponse(updateResult);
+      
+      if (choice === 'update' && updatedPlan) {
+        recorder.planUpdate(task, updatedPlan);
+        this.logger.info('任务计划已更新');
+      }
+      
+      return choice;
+    } catch (error) {
+      this.logger.error('任务计划更新失败:', error);
+      throw new Error(`任务计划更新失败: ${error instanceof Error ? error.message : '未知错误'}`);
     }
-    
-    return choice;
   }
 
   /**
@@ -90,6 +119,11 @@ export class PlannerAgent {
    */
   async planCheck(recorder: WorkspaceTaskRecorder, task: Subtask): Promise<void> {
     this.logger.info(`检查任务 ${task.taskId} 的完成情况`);
+    
+    // 检查 LLM 是否已初始化
+    if (!this.llm.isReady()) {
+      throw new Error('PlannerAgent LLM 未初始化');
+    }
     
     const checkPrompt = formatPrompt(WORKFORCE_PROMPTS.planner.TASK_CHECK_PROMPT, {
       overall_task: recorder.overallTask,
@@ -100,13 +134,20 @@ export class PlannerAgent {
       last_completed_task_result: task.taskResult || ''
     });
 
-    const checkResult = await this.llm.callLLM(checkPrompt);
-    recorder.addRunResult(checkResult, 'planner');
-    
-    const taskStatus = this.parseCheckResponse(checkResult);
-    task.taskStatus = taskStatus;
-    
-    this.logger.info(`任务 ${task.taskId} 状态更新为: ${taskStatus}`);
+    try {
+      // 使用 run 方法而不是 callLLM
+      const checkResultObj = await this.llm.run(checkPrompt);
+      const checkResult = checkResultObj.output || '';
+      recorder.addRunResult(checkResult, 'planner');
+      
+      const taskStatus = this.parseCheckResponse(checkResult);
+      task.taskStatus = taskStatus;
+      
+      this.logger.info(`任务 ${task.taskId} 状态更新为: ${taskStatus}`);
+    } catch (error) {
+      this.logger.error(`任务 ${task.taskId} 检查失败:`, error);
+      throw new Error(`任务检查失败: ${error instanceof Error ? error.message : '未知错误'}`);
+    }
   }
 
   /**

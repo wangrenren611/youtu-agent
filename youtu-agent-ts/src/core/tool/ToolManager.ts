@@ -306,6 +306,70 @@ export class ToolManager extends EventEmitter {
         }),
         handler: async (args) => `搜索结果: ${args['query']}`
       },
+      'web_search': {
+        name: 'web_search',
+        description: '在互联网上搜索信息',
+        parameters: z.object({
+          query: z.string().describe('搜索查询'),
+          maxResults: z.number().optional().default(5).describe('最大结果数量'),
+          language: z.string().optional().default('zh-CN').describe('搜索语言')
+        }),
+        handler: async (args) => {
+          try {
+            const { query, maxResults } = args;
+            
+            // 使用DuckDuckGo API进行搜索
+            const axios = await import('axios');
+            const response = await axios.default.get('https://api.duckduckgo.com/', {
+              params: {
+                q: query,
+                format: 'json',
+                no_html: '1',
+                skip_disambig: '1'
+              },
+              timeout: 10000
+            });
+
+            const results: any[] = [];
+            
+            // 处理抽象结果
+            if (response.data.Abstract) {
+              results.push({
+                title: response.data.Heading || query,
+                content: response.data.Abstract,
+                url: response.data.AbstractURL,
+                source: 'DuckDuckGo Abstract'
+              });
+            }
+
+            // 处理相关主题
+            if (response.data.RelatedTopics) {
+              for (const topic of response.data.RelatedTopics.slice(0, maxResults - results.length)) {
+                if (topic.Text && topic.FirstURL) {
+                  results.push({
+                    title: topic.Text.split(' - ')[0] || topic.Text,
+                    content: topic.Text,
+                    url: topic.FirstURL,
+                    source: 'DuckDuckGo Related'
+                  });
+                }
+              }
+            }
+
+            return JSON.stringify({
+              success: true,
+              query,
+              results: results.slice(0, maxResults),
+              count: results.length
+            });
+          } catch (error) {
+            return JSON.stringify({
+              success: false,
+              error: error instanceof Error ? error.message : '未知错误'
+            });
+          }
+        }
+      },
       'calculator': {
         name: 'calculator',
         description: '执行数学计算',

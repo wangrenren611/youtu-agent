@@ -30,7 +30,13 @@ export class AssignerAgent {
    * 初始化AssignerAgent
    */
   async initialize(): Promise<void> {
-    await this.llm.initialize();
+    try {
+      await this.llm.initialize();
+      this.logger.info('AssignerAgent LLM 初始化成功');
+    } catch (error) {
+      this.logger.error('AssignerAgent LLM 初始化失败:', error);
+      throw new Error(`AssignerAgent LLM 初始化失败: ${error instanceof Error ? error.message : '未知错误'}`);
+    }
   }
 
   /**
@@ -38,6 +44,11 @@ export class AssignerAgent {
    */
   async assignTask(recorder: WorkspaceTaskRecorder): Promise<Subtask> {
     this.logger.info('开始分配任务...');
+    
+    // 检查 LLM 是否已初始化
+    if (!this.llm.isReady()) {
+      throw new Error('AssignerAgent LLM 未初始化');
+    }
     
     const nextTask = recorder.getNextTask();
     
@@ -55,16 +66,22 @@ export class AssignerAgent {
     // 组合系统指令和用户提示
     const fullPrompt = `${systemPrompt}\n\n${userPrompt}`;
     
-    const assignResult = await this.llm.callLLM(fullPrompt);
-    recorder.addRunResult(assignResult, 'assigner');
+    try {
+      const assignResultObj = await this.llm.run(fullPrompt);
+      const assignResult = assignResultObj.output || '';
+      recorder.addRunResult(assignResult, 'assigner');
 
-    // 解析分配结果
-    const parsedResult = this.parseAssignResult(assignResult);
-    nextTask.taskDescription = parsedResult.assignTask;
-    nextTask.assignedAgent = parsedResult.assignAgent;
-    
-    this.logger.info(`任务 ${nextTask.taskId} 已分配给: ${nextTask.assignedAgent}`);
-    return nextTask;
+      // 解析分配结果
+      const parsedResult = this.parseAssignResult(assignResult);
+      nextTask.taskDescription = parsedResult.assignTask;
+      nextTask.assignedAgent = parsedResult.assignAgent;
+      
+      this.logger.info(`任务 ${nextTask.taskId} 已分配给: ${nextTask.assignedAgent}`);
+      return nextTask;
+    } catch (error) {
+      this.logger.error('任务分配失败:', error);
+      throw new Error(`任务分配失败: ${error instanceof Error ? error.message : '未知错误'}`);
+    }
   }
 
   /**

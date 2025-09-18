@@ -5,6 +5,7 @@
 
 import * as winston from 'winston';
 import * as path from 'path';
+import { inspect } from 'util';
 
 export class Logger {
   private readonly logger: winston.Logger;
@@ -24,9 +25,27 @@ export class Logger {
         format: 'YYYY-MM-DD HH:mm:ss'
       }),
       winston.format.errors({ stack: true }),
-      winston.format.printf(({ timestamp, level, message, stack, context }) => {
+      winston.format.printf(({ timestamp, level, message, stack, context, meta, error }) => {
         const ctx = context || this.context;
-        const msg = stack ? `${message}\n${stack}` : message;
+        let msg = message;
+        
+        // 如果有错误堆栈，添加到消息中
+        if (stack) {
+          msg = `${msg}\n${stack}`;
+        }
+        
+        // 如果有错误对象，格式化并添加到消息中
+        if (error) {
+          const errorStr = typeof error === 'object' ? inspect(error, { depth: 5, colors: false }) : String(error);
+          msg = `${msg} ${errorStr}`;
+        }
+        
+        // 如果有meta数据，将其格式化并添加到消息中
+        if (meta) {
+          const metaStr = typeof meta === 'object' ? inspect(meta, { depth: 3, colors: false }) : String(meta);
+          msg = `${msg} ${metaStr}`;
+        }
+        
         return `[${timestamp}] [${level.toUpperCase()}] [${ctx}] ${msg}`;
       })
     );
@@ -82,7 +101,7 @@ export class Logger {
    * @param meta 元数据
    */
   debug(message: string, meta?: any): void {
-    this.logger.debug(message, { context: this.context, ...meta });
+    this.logger.debug(message, { context: this.context, meta });
   }
 
   /**
@@ -91,7 +110,7 @@ export class Logger {
    * @param meta 元数据
    */
   info(message: string, meta?: any): void {
-    this.logger.info(message, { context: this.context, ...meta });
+    this.logger.info(message, { context: this.context, meta });
   }
 
   /**
@@ -100,7 +119,7 @@ export class Logger {
    * @param meta 元数据
    */
   warn(message: string, meta?: any): void {
-    this.logger.warn(message, { context: this.context, ...meta });
+    this.logger.warn(message, { context: this.context, meta });
   }
 
   /**
@@ -110,19 +129,19 @@ export class Logger {
    * @param meta 元数据
    */
   error(message: string, error?: any, meta?: any): void {
+    const logData: any = { context: this.context, meta };
+    
     if (error instanceof Error) {
-      this.logger.error(message, {
-        context: this.context,
-        error: {
-          name: error.name,
-          message: error.message,
-          stack: error.stack
-        },
-        ...meta
-      });
-    } else {
-      this.logger.error(message, { context: this.context, error, ...meta });
+      logData.error = {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      };
+    } else if (error) {
+      logData.error = error;
     }
+    
+    this.logger.error(message, logData);
   }
 
   /**

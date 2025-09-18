@@ -50,28 +50,28 @@ export class YoutuAgentTS {
     this.configManager = new ConfigManager();
     
     // 初始化数据库管理器（如果配置了DATABASE_URL）
-    const databaseUrl = process.env['DATABASE_URL'];
-    if (databaseUrl) {
-      try {
-        this.dbManager = DatabaseManager.getInstance({
-          url: databaseUrl,
-          poolSize: 10,
-          maxOverflow: 20,
-          poolTimeout: 30,
-          poolPrePing: true
-        });
-        this.dbTracingProcessor = new DBTracingProcessor(this.dbManager);
-        this.logger.info('数据库支持已启用');
-      } catch (error) {
-        this.logger.warn('数据库初始化失败，数据库支持已禁用:', error);
-        this.dbManager = null;
-        this.dbTracingProcessor = null;
-      }
-    } else {
-      this.dbManager = null;
-      this.dbTracingProcessor = null;
-      this.logger.info('未配置DATABASE_URL，数据库支持已禁用');
-    }
+    // const databaseUrl = process.env['DATABASE_URL'];
+    // if (databaseUrl) {
+    //   try {
+    //     this.dbManager = DatabaseManager.getInstance({
+    //       url: databaseUrl,
+    //       poolSize: 10,
+    //       maxOverflow: 20,
+    //       poolTimeout: 30,
+    //       poolPrePing: true
+    //     });
+    //     this.dbTracingProcessor = new DBTracingProcessor(this.dbManager);
+    //     this.logger.info('数据库支持已启用');
+    //   } catch (error) {
+    //     this.logger.warn('数据库初始化失败，数据库支持已禁用:', error);
+    //     this.dbManager = null;
+    //     this.dbTracingProcessor = null;
+    //   }
+    // } else {
+    //   this.dbManager = null;
+    //   this.dbTracingProcessor = null;
+    //   this.logger.info('未配置DATABASE_URL，数据库支持已禁用');
+    // }
   }
 
   /**

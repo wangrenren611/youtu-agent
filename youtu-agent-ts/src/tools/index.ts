@@ -18,7 +18,7 @@ export const builtinTools: ToolDefinition[] = [
   ...codeExecutorTools,
   ...imageTools,
   ...dataTools,
-  databaseTool
+  // databaseTool
 ];
 
 // 工具名称映射
@@ -37,7 +37,7 @@ export const toolsByCategory = {
   code: codeExecutorTools,
   image: imageTools,
   data: dataTools,
-  database: [databaseTool]
+  // database: [databaseTool]
 };
 
 // 导出所有工具

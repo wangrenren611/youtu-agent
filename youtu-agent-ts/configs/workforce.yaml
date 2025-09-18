@@ -1,66 +1,96 @@
-# Workforce Agent Configuration
-# 基于Python版本的workforce配置
-
+# Workforce Agent 配置示例
 type: workforce
-name: workforce_agent
-
-# 基础模型配置
+name: "workforce_agent"
 model:
-  provider: openai
-  model: gpt-4
+  provider: deepseek
+  model: "deepseek-chat"
+  apiKey: "${DEEPSEEK_API_KEY}"
   temperature: 0.7
   maxTokens: 4000
 
-# Workforce特定模型配置
+# Planner Agent 配置
 workforcePlannerModel:
-  provider: openai
-  model: gpt-4
+  provider: deepseek
+  model: "deepseek-chat"
+  apiKey: "${DEEPSEEK_API_KEY}"
   temperature: 0.3
   maxTokens: 2000
 
+# Assigner Agent 配置
 workforceAssignerModel:
-  provider: openai
-  model: gpt-4
-  temperature: 0.3
-  maxTokens: 1500
+  provider: deepseek
+  model: "deepseek-chat"
+  apiKey: "${DEEPSEEK_API_KEY}"
+  temperature: 0.5
+  maxTokens: 2000
 
+# Answerer Agent 配置
 workforceAnswererModel:
-  provider: openai
-  model: gpt-4
-  temperature: 0.1
-  maxTokens: 1000
+  provider: deepseek
+  model: "deepseek-chat"
+  apiKey: "${DEEPSEEK_API_KEY}"
+  temperature: 0.5
+  maxTokens: 3000
+
+# 执行器智能体信息
+workforceExecutorInfos:
+  - name: "researcher"
+    description: "信息研究员，负责收集和整理信息"
+    strengths: ["网络搜索", "信息整理", "事实核查"]
+    weaknesses: ["数据分析", "内容创作"]
+  
+  - name: "writer"
+    description: "内容写作者，负责撰写和编辑内容"
+    strengths: ["内容创作", "文案编辑", "结构化写作"]
+    weaknesses: ["数据分析", "技术实现"]
+  
+  - name: "analyst"
+    description: "数据分析师，负责数据处理和分析"
+    strengths: ["数据分析", "统计计算", "可视化"]
+    weaknesses: ["内容创作", "信息收集"]
 
 # 执行器智能体配置
 workforceExecutorAgents:
-  SearchAgent:
+  researcher:
     type: simple
-    name: search_agent
+    name: "researcher"
     model:
-      provider: openai
-      model: gpt-4
-      temperature: 0.7
-      maxTokens: 3000
-    tools:
-      - search
-      - web_search
-    instructions: |
-      You are a web information search specialist that excels at finding relevant information through search tools (Google, Wikipedia, archived pages) and extracting webpage content for understanding. Focuses on information discovery and identifying authoritative sources.
+      provider: deepseek
+      model: "deepseek-chat"
+      apiKey: "${DEEPSEEK_API_KEY}"
+    tools: ["web_search", "file_read"]
+    instructions: "你是一个专业的研究员，擅长收集和分析信息。"
+  
+  writer:
+    type: simple
+    name: "writer"
+    model:
+      provider: deepseek
+      model: "deepseek-chat"
+      apiKey: "${DEEPSEEK_API_KEY}"
+    tools: ["file_write", "file_read"]
+    instructions: "你是一个专业的写作者，擅长整理和撰写内容。"
+  
+  analyst:
+    type: simple
+    name: "analyst"
+    model:
+      provider: deepseek
+      model: "deepseek-chat"
+      apiKey: "${DEEPSEEK_API_KEY}"
+    tools: ["python_execute", "file_read", "file_write"]
+    instructions: "你是一个专业的数据分析师，擅长数据处理和分析。"
 
 # 执行器配置
 workforceExecutorConfig:
-  maxTries: 2  # 任务执行的最大重试次数
-  returnSummary: true  # 是否返回任务执行摘要
+  maxTries: 3
+  returnSummary: true
 
-# 执行器信息
-workforceExecutorInfos:
-  - name: SearchAgent
-    description: |
-      A web information search specialist that excels at finding relevant information through search tools (Google, Wikipedia, archived pages) and extracting webpage content for understanding. Focuses on information discovery and identifying authoritative sources.
-    strengths:
-      - Web search and information retrieval
-      - Content extraction and analysis
-      - Source verification and citation
-    weaknesses:
-      - Limited to publicly available information
-      - May not access real-time data
-      - Dependent on search engine results quality
+# 工具配置
+tools:
+  - "web_search"
+  - "file_read"
+  - "file_write"
+  - "python_execute"
+
+maxTurns: 50

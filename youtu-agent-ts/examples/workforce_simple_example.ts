@@ -1,14 +1,28 @@
 /**
- * Workforce Agent 使用示例
- * 演示如何使用优化后的 Workforce Agent 执行复杂任务
+ * Workforce Agent 简化版示例
+ * 演示如何使用修复后的 Workforce Agent 执行简单任务
  */
 
 import youtuAgent from '../src/index';
 import { AgentConfig } from '../src/types';
 
+// 检查环境变量
+function checkEnvVars() {
+  const deepseekKey = process.env.DEEPSEEK_API_KEY;
+  if (!deepseekKey || deepseekKey === 'your-actual-deepseek-api-key-here') {
+    console.warn('⚠️  警告: DEEPSEEK_API_KEY 未设置或使用默认值');
+    console.warn('   请在 .env 文件中设置实际的 API 密钥以获得最佳体验');
+  } else {
+    console.log('✅ DEEPSEEK_API_KEY 已设置');
+  }
+}
+
 async function main() {
   try {
-    console.log('🚀 启动 Workforce Agent 示例程序...');
+    console.log('🚀 启动 Workforce Agent 简化版示例程序...');
+    
+    // 检查环境变量
+    checkEnvVars();
 
     // 创建 Workforce Agent 配置
     const agentConfig: AgentConfig = {
@@ -55,12 +69,6 @@ async function main() {
           description: "内容写作者，负责撰写和编辑内容",
           strengths: ["内容创作", "文案编辑", "结构化写作"],
           weaknesses: ["数据分析", "技术实现"]
-        },
-        {
-          name: "analyst",
-          description: "数据分析师，负责数据处理和分析",
-          strengths: ["数据分析", "统计计算", "可视化"],
-          weaknesses: ["内容创作", "信息收集"]
         }
       ],
       workforceExecutorAgents: {
@@ -72,7 +80,7 @@ async function main() {
             model: 'deepseek-chat',
             apiKey: process.env.DEEPSEEK_API_KEY || 'your-api-key-here'
           },
-          tools: ['web_search', 'file_read'],
+          tools: ['web_search'],
           instructions: '你是一个专业的研究员，擅长收集和分析信息。'
         },
         writer: {
@@ -83,31 +91,21 @@ async function main() {
             model: 'deepseek-chat',
             apiKey: process.env.DEEPSEEK_API_KEY || 'your-api-key-here'
           },
-          tools: ['file_write', 'file_read'],
+          tools: [],
           instructions: '你是一个专业的写作者，擅长整理和撰写内容。'
-        },
-        analyst: {
-          type: 'simple',
-          name: 'analyst',
-          model: {
-            provider: 'deepseek',
-            model: 'deepseek-chat',
-            apiKey: process.env.DEEPSEEK_API_KEY || 'your-api-key-here'
-          },
-          tools: ['python_execute', 'file_read', 'file_write'],
-          instructions: '你是一个专业的数据分析师，擅长数据处理和分析。'
         }
       },
       workforceExecutorConfig: {
-        maxTries: 3,
+        maxTries: 2,
         returnSummary: true
       },
       instructions: '你是一个协调多个专业智能体完成复杂任务的协调者。',
-      tools: ['web_search', 'file_read', 'file_write', 'python_execute'],
-      maxTurns: 50
+      tools: ['web_search'],
+      maxTurns: 20
     };
 
     // 初始化框架
+    console.log('🔧 初始化框架...');
     await youtuAgent.initialize();
     console.log('✅ 框架初始化完成');
 
@@ -120,10 +118,16 @@ async function main() {
     const agentInfo = agent.getInfo();
     console.log('📊 智能体信息:', agentInfo);
 
+    // 检查智能体是否就绪
+    if (!agentInfo.isReady) {
+      console.warn('⚠️  警告: 智能体未就绪');
+    }
+
     // 运行 Workforce Agent
     console.log('🤖 开始与 Workforce Agent 对话...');
     
-    const task = "请分析当前人工智能技术的发展趋势，并生成一份详细的报告。报告应包括技术发展现状、主要挑战和未来展望。";
+    const task = "请告诉我当前人工智能技术的主要发展趋势是什么？";
+    console.log('📋 执行任务:', task);
     
     const result = await agent.run(task);
     
@@ -146,6 +150,12 @@ async function main() {
 
   } catch (error) {
     console.error('❌ 程序执行失败:', error);
+    if (error instanceof Error) {
+      console.error('错误详情:', {
+        message: error.message,
+        stack: error.stack
+      });
+    }
     process.exit(1);
   }
 }
